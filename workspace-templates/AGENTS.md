@@ -54,13 +54,6 @@ When subagents return results:
 
 ## Memory System — MANDATORY
 
-### ⚠️ CRITICAL: Use Scripts, Not Files
-**DO NOT write user facts, preferences, or personal info to USER.md, MEMORY.md, or any file.**
-**ALWAYS use the memory scripts below via the `exec` tool.** This is the ONLY way to store and recall memories.
-
-USER.md is READ-ONLY — it's set during wizard setup. Don't modify it.
-MEMORY.md should NOT be used. All memory goes through the semantic engine.
-
 ### Storing Memories (exec tool) — DO THIS AUTOMATICALLY, NEVER ASK
 When the user shares something worth remembering, **immediately** run this via `exec` — no confirmation needed:
 ```bash
