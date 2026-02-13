@@ -57,6 +57,8 @@ apt update && apt upgrade -y
 **Have these ready before you start:**
 - 🔑 An API key from at least one provider ([Anthropic](https://console.anthropic.com/settings/keys) or [DeepSeek](https://platform.deepseek.com/api_keys) recommended)
 - 💬 A Telegram bot token (message [@BotFather](https://t.me/BotFather) on Telegram to create one) — or use Discord/Signal/CLI instead
+- 🐙 A GitHub **classic** personal access token with `repo` scope — for GitOps auto-commit + backup ([create one here](https://github.com/settings/tokens/new?scopes=repo&description=cortex-workspace))
+  > ⚠️ **Use a Classic token**, not fine-grained. Fine-grained tokens can't create new repos without extra config.
 
 That's it. Now run the installer 👇
 
