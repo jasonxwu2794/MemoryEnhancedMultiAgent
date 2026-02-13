@@ -140,6 +140,61 @@ Total context window: 100%
 ```
 Smart retrieval: rank all matching memories, include only top 3-5 that fit in budget. If conversation is long, memory gets squeezed. If short, memory gets more room.
 
+### Turn Processing Pipeline
+Every conversation turn (user query + agent response) is processed before storage:
+
+**Step 1: Split the Turn**
+Each turn produces two separate processing units — the user message and the agent response. They are never stored as a single blob.
+
+**Step 2: Intelligent Chunking (long responses only)**
+- Short responses (< 200 tokens) → stored as one chunk
+- Long responses → split by **topic** using a cheap LLM call (DeepSeek/Qwen), not by character count
+- Each chunk becomes its own memory with `part_of` links tying them together
+- Retrieval can pull "OAuth2 discussion" without the unrelated "rate limiting" chunk from the same response
+
+**Step 3: Metadata Stamping**
+Every stored memory gets rich metadata:
+
+User message metadata:
+```json
+{
+  "type": "user_query",
+  "timestamp": "2026-02-13T04:05:00Z",
+  "user": "Jason",
+  "turn_id": "turn_047",
+  "tags": ["domain:auth", "type:request"],
+  "links": {
+    "response_id": "mem_048a"
+  }
+}
+```
+
+Agent response metadata:
+```json
+{
+  "type": "agent_response",
+  "timestamp": "2026-02-13T04:05:03Z",
+  "agent": "brain",
+  "turn_id": "turn_047",
+  "chunk": "1/2",
+  "tags": ["domain:auth", "topic:oauth2", "type:technical"],
+  "links": {
+    "query_id": "mem_047",
+    "sibling": "mem_048b",
+    "delegates": ["builder"]
+  }
+}
+```
+
+**Step 4: Standard Pipeline**
+After splitting, chunking, and stamping → each piece goes through dedup check, importance scoring, embedding generation, and storage.
+
+**Key properties:**
+- Bidirectional links — trace from any response back to its query, or from a chunk to its siblings
+- Semantic chunking — split at topic boundaries, not character counts
+- Cost-controlled — only long responses trigger the chunking LLM call (cheap model)
+- Nothing exists in isolation — every memory has context links
+
 ### Deduplication
 On every new memory ingest:
 1. **Exact/near duplicate** (similarity > 0.92) → Don't store. Boost importance of existing memory. Update timestamp.
