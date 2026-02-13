@@ -52,7 +52,8 @@ def get_weather(city: str) -> str:
         )
         if result.returncode == 0 and result.stdout.strip():
             raw = result.stdout.strip()
-            return f"🌤️ Weather in {city}: {raw}"
+            if "Unknown" not in raw and "Sorry" not in raw:
+                return f"🌤️ Weather in {city}: {raw}"
     except (subprocess.TimeoutExpired, Exception):
         pass
     return ""
@@ -207,7 +208,13 @@ def _system_health() -> dict:
 
 def compile_brief() -> str:
     """Compile the morning brief and return formatted string."""
-    now = datetime.now(timezone.utc)
+    # Use configured timezone for local date display
+    tz_name = _read_config("user.timezone", "UTC")
+    try:
+        local_tz = ZoneInfo(tz_name)
+    except Exception:
+        local_tz = timezone.utc
+    now = datetime.now(local_tz)
     date_str = now.strftime("%b %d, %Y")
 
     # Gather data
@@ -217,9 +224,9 @@ def compile_brief() -> str:
     mem = _memory_stats()
     health = _system_health()
 
-    # Weather (optional — only if city configured)
-    city = os.environ.get("MORNING_BRIEF_CITY", "")
-    weather_line = _weather(city) if city else None
+    # Weather (optional — from wizard config or env override)
+    city = _read_config("user.city") or os.environ.get("MORNING_BRIEF_CITY", "")
+    weather_line = get_weather(city) if city else None
 
     # Format
     lines = [f"☀️ Morning Brief — {date_str}", ""]
