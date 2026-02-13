@@ -74,7 +74,7 @@ if [ ${#MISSING[@]} -gt 0 ]; then
         case "$dep" in
             "Python 3.10+"*)
                 case "$PKG_MGR" in
-                    apt)    wizard_spin "Installing Python..." sudo apt-get update -qq && sudo apt-get install -y -qq python3 python3-pip ;;
+                    apt)    wizard_spin "Installing Python..." sh -c 'sudo apt-get update -qq && sudo apt-get install -y -qq python3 python3-pip' ;;
                     dnf)    wizard_spin "Installing Python..." sudo dnf install -y python3 python3-pip ;;
                     pacman) wizard_spin "Installing Python..." sudo pacman -Sy --noconfirm python python-pip ;;
                     brew)   wizard_spin "Installing Python..." brew install python@3.12 ;;
