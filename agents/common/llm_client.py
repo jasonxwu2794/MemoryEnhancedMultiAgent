@@ -39,10 +39,10 @@ MODEL_TO_PROVIDER: dict[str, str] = {
     "gemini-3-pro-preview": "google",
     "gemini-2.5-pro": "google",
     "gemini-2.5-flash": "google",
-    # Moonshot / Kimi (latest: K2.5)
-    "kimi-k2.5": "kimi",
-    "kimi-k2.5-thinking": "kimi",
-    "kimi-k2.5-instant": "kimi",
+    # Moonshot / Kimi (latest: K2.5 — 128K context)
+    "kimi-k2.5": "kimi",            # thinking/reasoning model
+    "kimi-k2.5-thinking": "kimi",   # alias for thinking model
+    "kimi-k2.5-instant": "kimi",    # non-thinking, fast variant
 }
 
 # Module-level singleton usage tracker
@@ -62,7 +62,7 @@ PROVIDERS: dict[str, tuple[str, str, str]] = {
     "deepseek": ("DEEPSEEK_API_KEY", "https://api.deepseek.com/v1", "deepseek-chat"),
     "qwen": ("QWEN_API_KEY", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", "qwen-plus"),
     "google": ("GOOGLE_API_KEY", "https://generativelanguage.googleapis.com/v1beta", "gemini-2.5-pro"),
-    "kimi": ("KIMI_API_KEY", "https://api.moonshot.cn/v1", "kimi-k2.5-instant"),
+    "kimi": ("KIMI_API_KEY", "https://api.moonshot.ai/v1", "kimi-k2.5-instant"),
 }
 
 # Standardized error result factory
@@ -428,7 +428,14 @@ class LLMClient:
             oai_messages.append({"role": "system", "content": system})
         oai_messages.extend(messages)
 
-        # Kimi K2.5 thinking mode requires specific parameters
+        # Kimi K2.5 temperature defaults: 0.6 for instruct, 1.0 for thinking
+        # Context limit: 128K tokens
+        if provider == "kimi" and "thinking" in model:
+            temperature = 1.0
+        elif provider == "kimi" and temperature == 0.7:
+            # Override default 0.7 with Kimi-recommended 0.6 for instruct
+            temperature = 0.6
+
         body = {
             "model": model,
             "messages": oai_messages,
@@ -438,7 +445,6 @@ class LLMClient:
 
         if provider == "kimi" and "thinking" in model:
             # K2.5 thinking enforces temperature=1.0, top_p=0.95
-            body["temperature"] = 1.0
             body["top_p"] = 0.95
             logger.info("Kimi K2.5 thinking mode: enforcing temperature=1.0, top_p=0.95")
 
