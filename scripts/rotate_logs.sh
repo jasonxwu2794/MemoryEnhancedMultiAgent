@@ -43,6 +43,31 @@ if [ -f "$HEALTH_LOG" ]; then
     fi
 fi
 
+# --- Harvest usage from usage.db ---
+USAGE_TOKENS=0
+USAGE_COST="0.0"
+USAGE_CALLS=0
+USAGE_TOP_MODEL=""
+USAGE_PER_AGENT="{}"
+
+if [ -f "$DATA_DIR/usage.db" ]; then
+    eval "$(python3 -c "
+import sqlite3, json
+conn = sqlite3.connect('$DATA_DIR/usage.db')
+conn.row_factory = sqlite3.Row
+row = conn.execute('SELECT COUNT(*) as calls, COALESCE(SUM(total_tokens),0) as tokens, COALESCE(SUM(cost_estimate),0) as cost FROM api_calls WHERE date(timestamp) >= date(\"now\",\"-7 days\")').fetchone()
+print(f'USAGE_CALLS={row[\"calls\"]}')
+print(f'USAGE_TOKENS={row[\"tokens\"]}')
+print(f'USAGE_COST={row[\"cost\"]}')
+top = conn.execute('SELECT model, SUM(cost_estimate) as c FROM api_calls WHERE date(timestamp) >= date(\"now\",\"-7 days\") GROUP BY model ORDER BY c DESC LIMIT 1').fetchone()
+if top: print(f'USAGE_TOP_MODEL=\"{top[\"model\"]}\"')
+agents = conn.execute('SELECT agent, COUNT(*) as calls FROM api_calls WHERE date(timestamp) >= date(\"now\",\"-7 days\") GROUP BY agent').fetchall()
+pa = {r['agent']: r['calls'] for r in agents}
+print(f'USAGE_PER_AGENT={json.dumps(pa)}')
+conn.close()
+" 2>/dev/null)" || true
+fi
+
 # --- Append metrics entry ---
 python3 -c "
 import json, sys
@@ -53,7 +78,12 @@ entry = {
     'memories_consolidated': $MEMORIES_CONSOLIDATED,
     'memories_pruned': $MEMORIES_PRUNED,
     'uptime_pct': $UPTIME_PCT,
-    'restarts': $RESTARTS
+    'restarts': $RESTARTS,
+    'usage_calls': $USAGE_CALLS,
+    'usage_tokens': $USAGE_TOKENS,
+    'usage_cost': $USAGE_COST,
+    'usage_top_model': '$USAGE_TOP_MODEL',
+    'usage_per_agent': $USAGE_PER_AGENT,
 }
 try:
     with open(metrics_file) as f:

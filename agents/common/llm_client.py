@@ -7,6 +7,7 @@ import json
 import os
 import re
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -14,8 +15,20 @@ import httpx
 
 from agents.common.retry import retry_with_backoff
 from agents.common.errors import LLMError, ConfigError
+from agents.common.usage_tracker import UsageTracker
 
 logger = logging.getLogger(__name__)
+
+# Module-level singleton usage tracker
+_usage_tracker: UsageTracker | None = None
+
+
+def get_usage_tracker() -> UsageTracker:
+    """Get or create the singleton UsageTracker instance."""
+    global _usage_tracker
+    if _usage_tracker is None:
+        _usage_tracker = UsageTracker()
+    return _usage_tracker
 
 # Provider → (env var for API key, base URL, default model)
 PROVIDERS: dict[str, tuple[str, str, str]] = {
@@ -71,11 +84,14 @@ class LLMClient:
         default_model: str | None = None,
         timeout: float = 60.0,
         code_timeout: float = 180.0,
+        agent_name: str = "unknown",
     ):
         self.default_model = default_model or os.getenv("LLM_DEFAULT_MODEL", "claude-sonnet-4-20250514")
         self.timeout = timeout
         self.code_timeout = code_timeout
+        self.agent_name = agent_name
         self._http = httpx.AsyncClient(timeout=timeout)
+        self._usage_tracker = get_usage_tracker()
 
     # ─── Public API ───────────────────────────────────────────────────
 
@@ -97,21 +113,34 @@ class LLMClient:
         if prompt and not messages:
             messages = [{"role": "user", "content": prompt}]
 
+        start_ms = time.monotonic_ns() // 1_000_000
         try:
             if provider == "anthropic":
-                return await self._call_with_resilience(
+                result = await self._call_with_resilience(
                     self._call_anthropic, provider,
                     model, system, messages or [], temperature, max_tokens,
                     is_code=is_code,
                 )
             else:
-                return await self._call_with_resilience(
+                result = await self._call_with_resilience(
                     self._call_openai_compat, provider,
                     provider, model, system, messages or [], temperature, max_tokens,
                     is_code=is_code,
                 )
+            duration_ms = int(time.monotonic_ns() // 1_000_000 - start_ms)
+            self._track_usage(result, model, provider, duration_ms)
+            return result
         except Exception as e:
+            duration_ms = int(time.monotonic_ns() // 1_000_000 - start_ms)
             logger.error(f"Unhandled LLM error for {provider}: {e}")
+            try:
+                self._usage_tracker.log_call(
+                    agent=self.agent_name, model=model, provider=provider,
+                    input_tokens=0, output_tokens=0, duration_ms=duration_ms,
+                    success=False, error_message=str(e),
+                )
+            except Exception:
+                pass
             return _error_result(f"Unexpected error: {e}", provider)
 
     async def generate_json(
@@ -158,6 +187,27 @@ class LLMClient:
 
         result["content"] = parsed
         return result
+
+    def _track_usage(self, result: dict, model: str, provider: str, duration_ms: int):
+        """Log usage from a completed LLM call."""
+        try:
+            if result.get("error"):
+                self._usage_tracker.log_call(
+                    agent=self.agent_name, model=model, provider=provider,
+                    input_tokens=0, output_tokens=0, duration_ms=duration_ms,
+                    success=False, error_message=result.get("message", ""),
+                )
+                return
+            usage = result.get("usage", {})
+            input_tokens = usage.get("input_tokens", usage.get("prompt_tokens", 0))
+            output_tokens = usage.get("output_tokens", usage.get("completion_tokens", 0))
+            self._usage_tracker.log_call(
+                agent=self.agent_name, model=model, provider=provider,
+                input_tokens=input_tokens, output_tokens=output_tokens,
+                duration_ms=duration_ms, success=True,
+            )
+        except Exception as e:
+            logger.debug(f"Usage tracking failed (non-fatal): {e}")
 
     async def close(self) -> None:
         await self._http.aclose()

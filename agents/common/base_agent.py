@@ -11,6 +11,7 @@ from typing import Any, Optional
 from agents.common.protocol import AgentRole, AgentMessage, TaskStatus, MessageBus
 from agents.common.llm_client import LLMClient
 from agents.common.sub_agent import SubAgentPool
+from agents.common.activity_log import ActivityLog
 from memory.engine import MemoryEngine
 
 logger = logging.getLogger(__name__)
@@ -43,10 +44,12 @@ class BaseAgent(ABC):
         memory: MemoryEngine | None = None,
         message_bus: MessageBus | None = None,
         llm: LLMClient | None = None,
+        activity_log: ActivityLog | None = None,
     ):
         self.memory: Optional[MemoryEngine] = memory
         self.bus: MessageBus = message_bus or MessageBus()
-        self.llm: LLMClient = llm or LLMClient(default_model=self.model)
+        self.llm: LLMClient = llm or LLMClient(default_model=self.model, agent_name=self.name)
+        self.activity_log: ActivityLog = activity_log or ActivityLog()
 
         # Sub-agent pool (initialised if the subclass declares support)
         self.sub_pool: Optional[SubAgentPool] = None
@@ -71,11 +74,20 @@ class BaseAgent(ABC):
 
     # ─── Lifecycle hooks ──────────────────────────────────────────────
 
+    def _log_activity(self, action_type: str, description: str, **kwargs):
+        """Convenience wrapper for activity logging (non-fatal)."""
+        try:
+            self.activity_log.log(agent=self.name, action_type=action_type, description=description, **kwargs)
+        except Exception as e:
+            logger.debug(f"Activity log failed (non-fatal): {e}")
+
     async def on_startup(self) -> None:
         """Called once when the agent starts. Override to initialise state."""
+        self._log_activity("startup", f"Agent {self.name} started")
 
     async def on_shutdown(self) -> None:
         """Called on graceful shutdown. Override to clean up."""
+        self._log_activity("shutdown", f"Agent {self.name} shutting down")
         await self.llm.close()
 
     # ─── Permission checks ────────────────────────────────────────────

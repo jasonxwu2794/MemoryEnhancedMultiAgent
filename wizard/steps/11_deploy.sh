@@ -490,6 +490,22 @@ init_db('data/memory.db')
 print('memory.db initialized')
 " 2>/dev/null && log_ok "Memory database initialized" || log_warn "Memory DB init failed — will retry on first use"
 
+# Usage tracking DB
+python3 -c "
+import sys; sys.path.insert(0, '.')
+from agents.common.usage_tracker import UsageTracker
+UsageTracker('data/usage.db')
+print('usage.db initialized')
+" 2>/dev/null && log_ok "Usage tracking database initialized" || log_warn "Usage DB init failed"
+
+# Activity log DB
+python3 -c "
+import sys; sys.path.insert(0, '.')
+from agents.common.activity_log import ActivityLog
+ActivityLog('data/activity.db')
+print('activity.db initialized')
+" 2>/dev/null && log_ok "Activity log database initialized" || log_warn "Activity DB init failed"
+
 # Message bus DB (simple SQLite)
 python3 -c "
 import sqlite3, os

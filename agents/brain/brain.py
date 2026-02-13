@@ -389,6 +389,12 @@ class BrainAgent(BaseAgent):
         except Exception as e:
             logger.warning(f"Memory gating failed (non-fatal): {e}")
 
+        # Log activity
+        self._log_activity(
+            "task_complete" if intent != INTENT_SIMPLE_CHAT else "chat",
+            f"Handled {intent}: {user_message[:80]}",
+        )
+
         return response
 
     # ─── Intent Classification ────────────────────────────────────────
@@ -554,6 +560,8 @@ class BrainAgent(BaseAgent):
         status_msg = self._verbose_status(agent)
         if status_msg:
             logger.info(f"Verbose status: {status_msg}")
+
+        self._log_activity("delegate", f"Delegated to {agent_name}: {user_message[:80]}")
 
         try:
             result = await self.session_manager.delegate(
@@ -952,6 +960,7 @@ class BrainAgent(BaseAgent):
                     f"Memory gating: stored {stored_count} memories, "
                     f"{facts_count} facts"
                 )
+                self._log_activity("memory_store", f"Stored {stored_count} memories, {facts_count} facts")
 
         except Exception as e:
             logger.warning(f"Memory gating LLM call failed: {e}")
@@ -1100,6 +1109,7 @@ class BrainAgent(BaseAgent):
         title = title[:80] if title else user_message[:80]
 
         idea = self.project_manager.add_idea(title=title, description=user_message)
+        self._log_activity("idea_add", f"Added idea to backlog: {title}")
         backlog = self.project_manager.list_ideas()
         count = len(backlog)
 
@@ -1229,6 +1239,8 @@ class BrainAgent(BaseAgent):
 
         # Generate spec (with research context if available)
         spec = await spec_writer.write_spec(self.llm, user_message, research_context=research_context)
+
+        self._log_activity("project_create", f"Creating project from: {user_message[:80]}")
 
         if not project:
             # Extract a short name and domain from the spec

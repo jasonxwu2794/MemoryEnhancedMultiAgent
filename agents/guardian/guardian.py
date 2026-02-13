@@ -32,6 +32,7 @@ from typing import Optional
 
 from agents.common.base_agent import BaseAgent
 from agents.common.protocol import AgentRole, AgentMessage, TaskStatus
+from agents.common.usage_tracker import UsageTracker
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +155,7 @@ class GuardianAgent(BaseAgent):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._system_prompt_text: Optional[str] = None
+        self._usage_tracker = UsageTracker()
 
         # Cost tracking
         self._daily_token_budget = int(
@@ -669,11 +671,12 @@ class GuardianAgent(BaseAgent):
     # ─── Reporting ────────────────────────────────────────────────────
 
     def _generate_cost_report(self) -> dict:
-        """Generate a cost tracking report."""
+        """Generate a cost tracking report using persistent UsageTracker."""
         return {
             "verdict": "pass",
             "issues": [],
             "cost_report": self._build_cost_report(),
+            "persistent_report": self._usage_tracker.get_cost_report(),
             "blocked_reason": None,
         }
 
