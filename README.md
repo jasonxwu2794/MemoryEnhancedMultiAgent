@@ -41,9 +41,9 @@ curl -fsSL https://raw.githubusercontent.com/jasonxwu2794/MemoryEnhancedMultiAge
 **What happens next:**
 
 1. **Wizard launches** — a beautiful terminal UI walks you through setup
-2. **Pick your style** — choose models, memory tier, messaging platform, and Brain's personality
+2. **Pick your style** — choose models, memory tier, messaging platform, and Cortex's personality
 3. **Enter API keys** — wizard validates each one in real time
-4. **Agents deploy** — Brain says hello on your chosen platform:
+4. **Agents deploy** — Cortex says hello on your chosen platform:
 
 ```
 Hey! 👋 I'm Cortex, your AI assistant. I'm all set up and ready to help

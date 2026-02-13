@@ -112,7 +112,7 @@ curl ... | bash
 ### Behavior
 
 - `gum choose` with descriptions
-- **Recommended** pre-fills all subsequent steps with sensible defaults (Claude for Brain, DeepSeek for Builder, Standard memory, etc.)
+- **Recommended** pre-fills all subsequent steps with sensible defaults (Claude for Cortex, DeepSeek for Builder, Standard memory, etc.)
 - **Custom** leaves all fields blank — user chooses everything
 - In both modes, every step is shown and editable — Recommended just saves time
 - Choice is stored in config for `--reconfigure` awareness
@@ -135,7 +135,7 @@ curl ... | bash
 ### Generated Files
 
 #### `USER.md`
-Personal identity file — read by Brain agent in main sessions.
+Personal identity file — read by Cortex agent in main sessions.
 
 ```markdown
 # User Profile
@@ -161,7 +161,7 @@ Building a multi-agent system
 - Field: Machine Learning
 ```
 
-> **Key distinction:** `USER.md` is personal (Brain only in main session). `TEAM.md` is shared (all agents, all sessions) for domain-relevant behavior without leaking personal details.
+> **Key distinction:** `USER.md` is personal (Cortex only in main session). `TEAM.md` is shared (all agents, all sessions) for domain-relevant behavior without leaking personal details.
 
 ### gum Components Used
 
@@ -200,9 +200,9 @@ All saved under `tech_stack.*`:
 
 ---
 
-## Step 5: Brain Agent Personality
+## Step 5: Cortex Agent Personality
 
-**Purpose:** Customize the user-facing agent's personality. Only Brain gets this — other agents maintain fixed professional personalities.
+**Purpose:** Customize the user-facing agent's personality. Only Cortex gets this — other agents maintain fixed professional personalities.
 
 ### Prompts
 
@@ -216,14 +216,14 @@ All saved under `tech_stack.*`:
 
 ### Verbose Mode
 
-- **Stealth** (default): Brain presents unified responses without revealing agent coordination
-- **Verbose**: Brain shows status messages when delegating (e.g. "🔨 Builder is working on that...") and notes which agent contributed to the response
+- **Stealth** (default): Cortex presents unified responses without revealing agent coordination
+- **Verbose**: Cortex shows status messages when delegating (e.g. "🔨 Builder is working on that...") and notes which agent contributed to the response
 
 Saved as `brain.verbose_mode` (`stealth` or `verbose`).
 
 ### SOUL.md Architecture — Two Layers
 
-Brain's `SOUL.md` is generated with a clear separation:
+Cortex's `SOUL.md` is generated with a clear separation:
 
 ```markdown
 # SOUL.md — Cortex 🧠
@@ -277,7 +277,7 @@ Brain's `SOUL.md` is generated with a clear separation:
 Other agents do **NOT** get personality customization. They have fixed, professional `SOUL.md` files that:
 - Define their specific role and capabilities
 - Reference `TEAM.md` for domain awareness
-- Maintain consistent, professional communication with Brain
+- Maintain consistent, professional communication with Cortex
 
 ---
 
@@ -299,7 +299,7 @@ Other agents do **NOT** get personality customization. They have fixed, professi
 
 | Agent | Default Model |
 |-------|--------------|
-| Brain | Claude Sonnet 4 |
+| Cortex | Claude Sonnet 4 |
 | Builder | DeepSeek |
 | Researcher | Qwen Max |
 | Verifier | Qwen Max |
@@ -335,7 +335,7 @@ Model Selection — Cortex 🧠
 
 ### Behavior
 
-1. Deduplicate: if Brain and Guardian both use Claude, ask for the Anthropic key once
+1. Deduplicate: if Cortex and Guardian both use Claude, ask for the Anthropic key once
 2. For each required provider:
    - Show link to get the key (e.g. `https://console.anthropic.com/settings/keys`)
    - `gum input --password` for secure entry
@@ -467,8 +467,8 @@ Telegram Bot Setup
 |------|---------|
 | `USER.md` | User identity (from Step 4) |
 | `TEAM.md` | Shared domain context (from Step 4) |
-| `agents/brain/SOUL.md` | Brain personality with locked + custom layers (from Step 5) |
-| `agents/brain/config.yaml` | Brain agent config — model, tools, channel |
+| `agents/brain/SOUL.md` | Cortex personality with locked + custom layers (from Step 5) |
+| `agents/brain/config.yaml` | Cortex agent config — model, tools, channel |
 | `agents/builder/SOUL.md` | Builder role definition (fixed) |
 | `agents/builder/config.yaml` | Builder agent config |
 | `agents/researcher/SOUL.md` | Researcher/Researcher role definition (fixed) |
@@ -484,13 +484,13 @@ Telegram Bot Setup
 
 1. Write all config files
 2. Restart OpenClaw gateway (`systemctl restart openclaw`)
-3. Start Brain agent
-4. Brain sends **first message** on chosen platform:
+3. Start Cortex agent
+4. Cortex sends **first message** on chosen platform:
    ```
    Hey Jase! 👋 I'm Cortex, your AI assistant. I'm all set up and ready to help
    with your Machine Learning work. What would you like to start with?
    ```
-5. Other agents (Builder, Researcher, Verifier, Guardian) are configured but **dormant** — they only spawn when Brain delegates to them
+5. Other agents (Builder, Researcher, Verifier, Guardian) are configured but **dormant** — they only spawn when Cortex delegates to them
 
 ### gum Components Used
 
@@ -512,7 +512,7 @@ These are pre-set and not wizard-configurable (keeping the wizard focused):
 | ✅ | Verifier | Verifier | Fact verification, accuracy |
 | 🛡️ | Guardian | Guardian | Security review, safety |
 
-> Only Brain's name is customizable (Step 5). Other agents use fixed identities.
+> Only Cortex's name is customizable (Step 5). Other agents use fixed identities.
 
 ---
 

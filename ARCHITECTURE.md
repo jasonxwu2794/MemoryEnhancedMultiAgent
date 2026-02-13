@@ -5,7 +5,7 @@
 A multi-agent AI system that runs on OpenClaw, designed for someone interested in AI agents running on a ~$5-20 VPS. No Docker, no Redis, no complex infrastructure — just OpenClaw sessions and SQLite.
 
 - **One-command installer** with TUI wizard (using `gum`)
-- **5 AI agents** as OpenClaw sessions, orchestrated by Brain
+- **5 AI agents** as OpenClaw sessions, orchestrated by Cortex
 - **Layered memory system** with SQLite for everything
 - **Portable agent interface** — designed to migrate to Docker later if needed
 
@@ -28,7 +28,7 @@ No containers. No Redis. No separate services. One process, one database file, m
 ### 🔨 Builder (Engineer)
 - **Role**: Code generation, file operations, tool execution, debugging
 - **Model**: Fast code model (deepseek-chat or codestral)
-- **Runs as**: Spawned session from Brain
+- **Runs as**: Spawned session from Cortex
 - **Permissions**: Can execute code, NO internet, NO memory writes, flags factual claims
 - **Sub-agents**: YES for multi-component builds (architect → parallel build → integration → test)
 - **Context receives**: Recent code context, file state, available tools, interface contracts
@@ -36,7 +36,7 @@ No containers. No Redis. No separate services. One process, one database file, m
 ### ✅ Verifier (Editor/QA)
 - **Role**: Claim verification, source checking, consistency analysis, hallucination detection, knowledge cache updates
 - **Model**: Precise reasoning model (qwen-max or claude)
-- **Runs as**: Spawned session from Brain
+- **Runs as**: Spawned session from Cortex
 - **Permissions**: Can search web, can update knowledge cache, NO code execution
 - **Sub-agents**: YES for batch verification (parallel claim checking)
 - **Context receives**: Claims to verify, knowledge cache excerpts, conversation claims
@@ -44,7 +44,7 @@ No containers. No Redis. No separate services. One process, one database file, m
 ### 🔬 Researcher (Analyst/Librarian)
 - **Role**: Proactive information gathering, multi-source synthesis, documentation reading, prior art discovery
 - **Model**: Good at synthesis (qwen-max or similar)
-- **Runs as**: Spawned session from Brain
+- **Runs as**: Spawned session from Cortex
 - **Permissions**: Full web access, can read repos/docs, feeds knowledge cache
 - **Sub-agents**: ALWAYS — research is embarrassingly parallel (3-6 threads per query, then synthesis)
 - **Context receives**: Research query, known knowledge gaps, preferred source types
@@ -52,7 +52,7 @@ No containers. No Redis. No separate services. One process, one database file, m
 ### 🛡️ Guardian (Security Lead)
 - **Role**: Security review of Builder output, config validation, prompt injection detection, permissions monitoring, cost tracking
 - **Model**: Precise model (claude or qwen-max)
-- **Runs as**: Spawned session from Brain
+- **Runs as**: Spawned session from Cortex
 - **Permissions**: Read-only on all agent outputs, can BLOCK actions, monitors costs
 - **Sub-agents**: NEVER — must see full picture
 - **Context receives**: Full output under review, permissions config, cost metrics
@@ -64,7 +64,7 @@ Sub-agents are concurrent LLM calls within the parent agent's OpenClaw session. 
 ### Sub-Agent Decision Matrix
 | Agent | Sub-Agents? | Trigger Condition |
 |-------|-------------|-------------------|
-| Brain | ✗ Never | N/A |
+| Cortex | ✗ Never | N/A |
 | Builder | ✓ Conditional | Multi-component builds only |
 | Verifier | ✓ Conditional | Batch verification (3+ claims) |
 | Researcher | ✓ Always | Every query → 3-6 parallel threads |
@@ -72,7 +72,7 @@ Sub-agents are concurrent LLM calls within the parent agent's OpenClaw session. 
 
 ## Communication Protocol
 
-All agent communication goes through **SQLite tables** acting as a message bus. Brain orchestrates all routing — no direct agent-to-agent communication.
+All agent communication goes through **SQLite tables** acting as a message bus. Cortex orchestrates all routing — no direct agent-to-agent communication.
 
 ### Message Format
 ```python
@@ -91,7 +91,7 @@ class AgentMessage:
 ```
 
 ### Context Scoping (Critical)
-Brain acts as a privacy/relevance filter. Each agent ONLY receives the context it needs (see agent descriptions above). This keeps token usage efficient and prevents context pollution.
+Cortex acts as a privacy/relevance filter. Each agent ONLY receives the context it needs (see agent descriptions above). This keeps token usage efficient and prevents context pollution.
 
 ## Memory Architecture
 
@@ -212,7 +212,7 @@ CREATE TABLE memory_links (
     created_at TIMESTAMP
 );
 ```
-When Brain retrieves a memory, it follows links to pull related context. "User likes Python" → links to "User builds ML pipelines" → links to "User prefers PyTorch." One retrieval gives a cluster of connected knowledge.
+When Cortex retrieves a memory, it follows links to pull related context. "User likes Python" → links to "User builds ML pipelines" → links to "User prefers PyTorch." One retrieval gives a cluster of connected knowledge.
 
 ### Memory Conflict Resolution
 When new memory contradicts an existing one (detected via dedup check + LLM classification):
@@ -236,24 +236,24 @@ When new memory contradicts an existing one (detected via dedup check + LLM clas
 ### Cross-Agent Memory
 - Researcher discovers info during research → writes to knowledge cache
 - Verifier verifies claims → writes to knowledge cache
-- Brain reads knowledge cache automatically on next relevant query
+- Cortex reads knowledge cache automatically on next relevant query
 - System gets smarter over time without user doing anything
 
 ### Feedback-Driven Importance
-When Brain retrieves a memory and user responds:
+When Cortex retrieves a memory and user responds:
 - Positive signal ("exactly", "that's right") → boost importance by 0.1
 - Negative signal ("that's outdated", "wrong") → decay importance by 0.3 or mark superseded
-- Brain detects these signals naturally during conversation, no explicit UI needed
+- Cortex detects these signals naturally during conversation, no explicit UI needed
 
 ### Memory Permissions
-- **Brain**: Read + write shared memory (gatekeeper)
+- **Cortex**: Read + write shared memory (gatekeeper)
 - **Builder**: Read shared memory only
 - **Verifier**: Read shared memory, write knowledge cache
 - **Researcher**: Read shared memory, write knowledge cache
 - **Guardian**: Read all memory (audit), no writes
 
 ### Auto-Tagging
-Every memory is automatically tagged on ingest by Brain's gating process:
+Every memory is automatically tagged on ingest by Cortex's gating process:
 - **Domain tags**: `domain:python`, `domain:ml`, `domain:devops`
 - **Type tags**: `type:preference`, `type:decision`, `type:fact`, `type:correction`, `type:project`
 - **Project tags**: `project:ml-pipeline`, `project:api-refactor`
@@ -410,7 +410,7 @@ memory-enhanced-multi-agent/
 ├── configs/
 │   ├── base/
 │   │   ├── agents.yaml                 # Agent definitions + model assignments
-│   │   ├── routing_rules.yaml          # Brain routing logic
+│   │   ├── routing_rules.yaml          # Cortex routing logic
 │   │   ├── permissions.yaml            # Agent permissions matrix
 │   │   └── system-prompts/
 │   ├── overlays/
@@ -443,7 +443,7 @@ memory-enhanced-multi-agent/
 ### Phase 1 — Wizard + Single Agent
 - Wizard (gum TUI) with OpenClaw install check
 - Config generation from templates
-- Brain agent running as main OpenClaw session
+- Cortex agent running as main OpenClaw session
 - Basic SQLite schema for message bus + memory
 - Single-agent mode working end-to-end
 
@@ -452,13 +452,13 @@ memory-enhanced-multi-agent/
 - Knowledge cache + scoring tables
 - Retrieval API with importance/recency scoring
 - Embedding generation (local or API)
-- Hook into Brain's conversation flow
+- Hook into Cortex's conversation flow
 
 ### Phase 3 — Multi-Agent Sessions
 - Agent interface implementation for OpenClaw sessions
-- Brain spawns Builder, Verifier, Researcher, Guardian as sessions
+- Cortex spawns Builder, Verifier, Researcher, Guardian as sessions
 - SQLite message bus for communication
-- Context scoping through Brain
+- Context scoping through Cortex
 - Sub-agent pools for Builder and Researcher
 
 ### Phase 4 — Polish + Hardening
@@ -472,9 +472,9 @@ memory-enhanced-multi-agent/
 
 1. **OpenClaw sessions** (not Docker) — zero infrastructure overhead, runs on a $5 VPS, easy to understand
 2. **SQLite for everything** (not Redis + LanceDB + Postgres) — one file, zero config, sufficient for single-user scale
-3. **Brain as main session** — natural hub, user talks to Brain, Brain delegates via spawned sessions
+3. **Cortex as main session** — natural hub, user talks to Cortex, Cortex delegates via spawned sessions
 4. **Portable agent interface** — abstract the transport so we can move to Docker containers later without rewriting agents
 5. **gum for TUI** — single binary, beautiful defaults, shell-native
 6. **Sub-agents as concurrent calls** (not separate sessions) — lightweight, fast, shared model connection
-7. **Guardian as interceptor** — sees all traffic through Brain, can block, doesn't need its own delegation chain
-8. **Context scoping through Brain** — each agent gets only what it needs, keeping token usage efficient
+7. **Guardian as interceptor** — sees all traffic through Cortex, can block, doesn't need its own delegation chain
+8. **Context scoping through Cortex** — each agent gets only what it needs, keeping token usage efficient
