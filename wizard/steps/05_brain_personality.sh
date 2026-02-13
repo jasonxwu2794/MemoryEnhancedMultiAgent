@@ -76,7 +76,7 @@ PERSONALITY_NOTES="$(wizard_input "✨ Personality:" "Press Enter to skip" "$DEF
 # --- Agent Transparency ---
 echo ""
 gum style --foreground 212 "Agent transparency:"
-VERBOSE_OPTS=("Stealth — Brain handles everything silently, clean unified responses" "Verbose — Show when agents are working (🔬 Researcher is researching...)")
+VERBOSE_OPTS=("Verbose — Show when agents are working (🔬 Researcher is researching...)" "Stealth — Brain handles everything silently, clean unified responses")
 
 DEF_VERBOSE="$(state_get 'brain.verbose_mode' 'verbose')"
 VERBOSE_CHOICE="$(gum choose "${VERBOSE_OPTS[@]}")"
