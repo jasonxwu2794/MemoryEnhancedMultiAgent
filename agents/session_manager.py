@@ -224,19 +224,41 @@ class AgentSessionManager:
         """
         Spawn multiple agent sessions concurrently and collect their results.
 
-        Independent tasks run in parallel. Returns results in the same order
-        as the input tasks list.
+        Independent tasks run in parallel. If one agent fails, others still
+        return their results (fail-partial, not fail-all).
         """
+        # Default timeouts per agent type
+        default_timeouts = {
+            "builder": 120.0,
+            "verifier": 90.0,
+            "investigator": 90.0,
+        }
+
         coros = [
             self.delegate(
                 agent_name=t.agent_name,
                 task=t.task,
                 context=t.context,
-                timeout=timeout,
+                timeout=default_timeouts.get(t.agent_name, timeout),
             )
             for t in tasks
         ]
-        return list(await asyncio.gather(*coros, return_exceptions=False))
+        raw_results = await asyncio.gather(*coros, return_exceptions=True)
+
+        results: list[DelegationResult] = []
+        for task, result in zip(tasks, raw_results):
+            if isinstance(result, Exception):
+                logger.error(f"Parallel delegation to {task.agent_name} raised: {result}")
+                results.append(DelegationResult(
+                    agent_name=task.agent_name,
+                    success=False,
+                    result="",
+                    session_key="",
+                    error=str(result),
+                ))
+            else:
+                results.append(result)
+        return results
 
     async def _run_session(self, spawn_args: dict, timeout: float) -> str:
         """

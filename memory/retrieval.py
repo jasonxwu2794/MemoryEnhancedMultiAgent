@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import json
+import logging
 import sqlite3
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 from memory.embeddings import cosine_similarity, deserialize_embedding
 from memory.scoring import compute_recency_score, compute_composite_score
@@ -33,11 +37,24 @@ def retrieve_memories(
     for row in rows:
         if row["embedding"] is None:
             continue
-        emb = deserialize_embedding(row["embedding"])
-        semantic_sim = cosine_similarity(query_embedding, emb)
+        try:
+            emb = deserialize_embedding(row["embedding"])
+            semantic_sim = cosine_similarity(query_embedding, emb)
+        except Exception as e:
+            logger.warning(f"Failed to deserialize/compare embedding for {row['id']}: {e}")
+            continue
         recency = compute_recency_score(row["created_at"])
         importance = row["importance"]
         score = compute_composite_score(semantic_sim, recency, importance, strategy)
+
+        # Handle metadata gracefully
+        metadata = {}
+        try:
+            raw_meta = row["metadata"]
+            if raw_meta and isinstance(raw_meta, str):
+                metadata = json.loads(raw_meta)
+        except (json.JSONDecodeError, TypeError, IndexError, KeyError):
+            metadata = {}
 
         scored.append((score, {
             "id": row["id"],
@@ -49,6 +66,7 @@ def retrieve_memories(
             "score": score,
             "semantic_similarity": semantic_sim,
             "source_agent": row["source_agent"],
+            "metadata": metadata,
         }))
 
     scored.sort(key=lambda x: x[0], reverse=True)

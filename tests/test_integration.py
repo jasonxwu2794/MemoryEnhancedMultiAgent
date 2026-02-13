@@ -153,7 +153,8 @@ with tempfile.TemporaryDirectory() as tmpdir:
         tags=["preference", "language"],
         signals=["user_preference"],
     )
-    stored_ids = engine.ingest(turn)
+    ingest_result = engine.ingest(turn)
+    stored_ids = ingest_result.get("stored_ids", []) if isinstance(ingest_result, dict) else ingest_result
     report("Ingest returns stored IDs", len(stored_ids) > 0, f"{len(stored_ids)} chunks stored")
 
     # Check DB has rows
@@ -185,7 +186,8 @@ with tempfile.TemporaryDirectory() as tmpdir:
         tags=["preference"],
         signals=["user_preference"],
     )
-    stored_dup = engine.ingest(turn_dup)
+    dup_result = engine.ingest(turn_dup)
+    stored_dup = dup_result.get("stored_ids", []) if isinstance(dup_result, dict) else dup_result
 
     count_after = engine.db.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
 

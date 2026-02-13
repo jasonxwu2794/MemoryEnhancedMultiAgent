@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -10,6 +11,9 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
+
+from agents.common.retry import retry_with_backoff
+from agents.common.errors import LLMError, ConfigError
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +26,10 @@ PROVIDERS: dict[str, tuple[str, str, str]] = {
     "kimi": ("KIMI_API_KEY", "https://api.moonshot.cn/v1", "moonshot-v1-8k"),
     "mistral": ("MISTRAL_API_KEY", "https://api.mistral.ai/v1", "mistral-large-latest"),
 }
+
+# Standardized error result factory
+def _error_result(message: str, provider: str = "") -> dict[str, Any]:
+    return {"error": True, "message": message, "provider": provider, "content": ""}
 
 
 @dataclass
@@ -52,15 +60,21 @@ def _detect_provider(model: str) -> str:
 
 
 class LLMClient:
-    """Multi-provider LLM client.
+    """Multi-provider LLM client with comprehensive error handling.
 
-    Fully implements Anthropic Messages API. Other providers use
-    OpenAI-compatible chat/completions endpoint (stubbed same shape).
+    All errors return standardized error dicts instead of raising.
+    Includes retry logic for transient failures.
     """
 
-    def __init__(self, default_model: str | None = None, timeout: float = 120.0):
+    def __init__(
+        self,
+        default_model: str | None = None,
+        timeout: float = 60.0,
+        code_timeout: float = 180.0,
+    ):
         self.default_model = default_model or os.getenv("LLM_DEFAULT_MODEL", "claude-sonnet-4-20250514")
         self.timeout = timeout
+        self.code_timeout = code_timeout
         self._http = httpx.AsyncClient(timeout=timeout)
 
     # ─── Public API ───────────────────────────────────────────────────
@@ -74,18 +88,31 @@ class LLMClient:
         model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
+        is_code: bool = False,
     ) -> dict[str, Any]:
-        """Generate a text response. Returns {"content": str, ...}."""
+        """Generate a text response. Returns {"content": str, ...} or error dict."""
         model = model or self.default_model
         provider = _detect_provider(model)
 
         if prompt and not messages:
             messages = [{"role": "user", "content": prompt}]
 
-        if provider == "anthropic":
-            return await self._call_anthropic(model, system, messages or [], temperature, max_tokens)
-        else:
-            return await self._call_openai_compat(provider, model, system, messages or [], temperature, max_tokens)
+        try:
+            if provider == "anthropic":
+                return await self._call_with_resilience(
+                    self._call_anthropic, provider,
+                    model, system, messages or [], temperature, max_tokens,
+                    is_code=is_code,
+                )
+            else:
+                return await self._call_with_resilience(
+                    self._call_openai_compat, provider,
+                    provider, model, system, messages or [], temperature, max_tokens,
+                    is_code=is_code,
+                )
+        except Exception as e:
+            logger.error(f"Unhandled LLM error for {provider}: {e}")
+            return _error_result(f"Unexpected error: {e}", provider)
 
     async def generate_json(
         self,
@@ -96,7 +123,7 @@ class LLMClient:
         model: str | None = None,
         max_tokens: int = 4096,
     ) -> dict[str, Any]:
-        """Generate and parse a JSON response. Returns {"content": <parsed dict>, ...}."""
+        """Generate and parse a JSON response. Returns {"content": <parsed dict>, ...} or error dict."""
         result = await self.generate(
             system=system,
             prompt=prompt,
@@ -104,29 +131,90 @@ class LLMClient:
             temperature=temperature,
             max_tokens=max_tokens,
         )
+
+        if result.get("error"):
+            return result
+
         text = result["content"]
 
-        # Try to extract JSON from response
         try:
             parsed = json.loads(text)
         except json.JSONDecodeError:
-            # Try to find JSON block in text
             match = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
             if match:
-                parsed = json.loads(match.group(1).strip())
+                try:
+                    parsed = json.loads(match.group(1).strip())
+                except json.JSONDecodeError:
+                    return _error_result(f"Could not parse JSON from response: {text[:200]}", result.get("provider", ""))
             else:
-                # Try to find first { ... } block
                 match = re.search(r"\{[\s\S]*\}", text)
                 if match:
-                    parsed = json.loads(match.group(0))
+                    try:
+                        parsed = json.loads(match.group(0))
+                    except json.JSONDecodeError:
+                        return _error_result(f"Could not parse JSON from response: {text[:200]}", result.get("provider", ""))
                 else:
-                    raise ValueError(f"Could not parse JSON from LLM response: {text[:200]}")
+                    return _error_result(f"No JSON found in response: {text[:200]}", result.get("provider", ""))
 
         result["content"] = parsed
         return result
 
     async def close(self) -> None:
         await self._http.aclose()
+
+    # ─── Resilience wrapper ───────────────────────────────────────────
+
+    async def _call_with_resilience(
+        self, fn, provider: str, *args, is_code: bool = False, **kwargs
+    ) -> dict[str, Any]:
+        """Wrap an API call with retry/error handling."""
+        timeout = self.code_timeout if is_code else self.timeout
+
+        try:
+            return await asyncio.wait_for(fn(*args, **kwargs), timeout=timeout)
+
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout for {provider} ({timeout}s), retrying with extended timeout")
+            try:
+                return await asyncio.wait_for(fn(*args, **kwargs), timeout=timeout * 2)
+            except (asyncio.TimeoutError, Exception) as e:
+                return _error_result(f"Request timed out after retry ({timeout * 2}s)", provider)
+
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code
+            if status == 401:
+                logger.error(f"API key invalid for {provider}")
+                return _error_result(f"API key invalid for {provider}", provider)
+            elif status == 429:
+                # Exponential backoff retry for rate limits
+                for attempt, delay in enumerate([2, 4, 8]):
+                    logger.warning(f"Rate limited by {provider}, retry {attempt + 1}/3 after {delay}s")
+                    await asyncio.sleep(delay)
+                    try:
+                        return await fn(*args, **kwargs)
+                    except httpx.HTTPStatusError as retry_e:
+                        if retry_e.response.status_code != 429:
+                            return _error_result(f"HTTP {retry_e.response.status_code} from {provider}", provider)
+                return _error_result(f"Rate limited by {provider} after 3 retries", provider)
+            elif status in (500, 502, 503):
+                logger.warning(f"Server error {status} from {provider}, retrying once after 3s")
+                await asyncio.sleep(3)
+                try:
+                    return await fn(*args, **kwargs)
+                except Exception as retry_e:
+                    return _error_result(f"Server error {status} from {provider} after retry: {retry_e}", provider)
+            else:
+                return _error_result(f"HTTP {status} from {provider}: {e}", provider)
+
+        except httpx.TimeoutException:
+            logger.warning(f"httpx timeout for {provider}, retrying once")
+            try:
+                return await fn(*args, **kwargs)
+            except Exception as e:
+                return _error_result(f"Timeout from {provider} after retry: {e}", provider)
+
+        except Exception as e:
+            return _error_result(f"Unexpected error from {provider}: {e}", provider)
 
     # ─── Anthropic Messages API ───────────────────────────────────────
 
@@ -140,7 +228,7 @@ class LLMClient:
     ) -> dict[str, Any]:
         api_key = os.environ.get("ANTHROPIC_API_KEY", "")
         if not api_key:
-            raise RuntimeError("ANTHROPIC_API_KEY not set")
+            return _error_result("ANTHROPIC_API_KEY not set", "anthropic")
 
         body: dict[str, Any] = {
             "model": model,
@@ -190,7 +278,7 @@ class LLMClient:
         env_var, base_url, _ = PROVIDERS[provider]
         api_key = os.environ.get(env_var, "")
         if not api_key:
-            raise RuntimeError(f"{env_var} not set for provider {provider}")
+            return _error_result(f"{env_var} not set for provider {provider}", provider)
 
         oai_messages = []
         if system:

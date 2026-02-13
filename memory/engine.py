@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import sqlite3
+import time
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -16,6 +19,8 @@ from memory.dedup import check_duplicate, handle_duplicate
 from memory.chunker import split_turn, stamp_metadata, Chunk
 from memory.knowledge_cache import lookup_facts
 from memory.retrieval import retrieve_memories, follow_links, apply_context_budget
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -33,16 +38,35 @@ class MemoryEngine:
     """Orchestrates all memory operations: ingest, retrieve, feedback, budgeting."""
 
     def __init__(self, db_path: str | Path = "data/memory.db", embedder_config: dict | None = None):
+        self._db_path = str(db_path)
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-        self.db: sqlite3.Connection = init_db(db_path)
+        try:
+            self.db: sqlite3.Connection = init_db(db_path)
+        except Exception as e:
+            logger.error(f"Failed to init DB at {db_path}: {e}, creating fresh")
+            try:
+                Path(db_path).unlink(missing_ok=True)
+                self.db = init_db(db_path)
+            except Exception as e2:
+                logger.error(f"Could not create fresh DB: {e2}")
+                # In-memory fallback
+                self.db = init_db(":memory:")
         self.embedder: Embedder = get_embedder(embedder_config)
 
-    def ingest(self, turn: Turn) -> list[str]:
+    def ingest(self, turn: Turn) -> dict:
         """Process a conversation turn through the full pipeline.
         
         Pipeline: split → chunk → stamp → dedup → score → embed → store.
-        Returns list of stored memory IDs.
+        Never crashes the caller — always returns success/failure dict.
         """
+        try:
+            return self._ingest_inner(turn)
+        except Exception as e:
+            logger.error(f"Memory ingest failed (non-fatal): {e}", exc_info=True)
+            return {"success": False, "error": str(e), "stored_ids": []}
+
+    def _ingest_inner(self, turn: Turn) -> dict:
+        """Inner ingest — may raise."""
         chunks = split_turn(turn.user_message, turn.agent_response)
 
         # Build cross-links between user query and response chunks
@@ -64,28 +88,49 @@ class MemoryEngine:
         importance = compute_importance_score(turn.signals or [])
 
         for chunk in chunks:
-            embedding = self.embedder.embed(chunk.content)
+            # Attempt embedding; store without if it fails
+            try:
+                embedding = self.embedder.embed(chunk.content)
+            except Exception as e:
+                logger.warning(f"Embedding failed for chunk {chunk.id}: {e}, storing text-only")
+                embedding = None
 
-            # Dedup check
-            dedup_result = check_duplicate(embedding, existing)
-            should_store = handle_duplicate(chunk.id, dedup_result.match_type, dedup_result.matched_id, self.db)
+            # Dedup check (skip if no embedding)
+            if embedding is not None:
+                dedup_result = check_duplicate(embedding, existing)
+                should_store = handle_duplicate(chunk.id, dedup_result.match_type, dedup_result.matched_id, self.db)
+                if not should_store:
+                    continue
 
-            if not should_store:
-                continue
-
-            # Store
+            # Store with retry for locked DB
             tags_str = ",".join(turn.tags) if turn.tags else None
-            self.db.execute(
+            emb_blob = serialize_embedding(embedding) if embedding is not None else None
+            self._execute_with_retry(
                 "INSERT INTO memories (id, content, embedding, tier, importance, tags, source_agent, metadata) "
                 "VALUES (?, ?, ?, 'short_term', ?, ?, ?, ?)",
-                (chunk.id, chunk.content, serialize_embedding(embedding), importance,
+                (chunk.id, chunk.content, emb_blob, importance,
                  tags_str, turn.agent, json.dumps(chunk.metadata)),
             )
-            self.db.commit()
             stored_ids.append(chunk.id)
-            existing.append((chunk.id, embedding))
+            if embedding is not None:
+                existing.append((chunk.id, embedding))
 
-        return stored_ids
+        return {"success": True, "stored_ids": stored_ids}
+
+    def _execute_with_retry(self, sql: str, params: tuple, max_retries: int = 3) -> None:
+        """Execute SQL with retry on database locked errors."""
+        for attempt in range(max_retries):
+            try:
+                self.db.execute(sql, params)
+                self.db.commit()
+                return
+            except sqlite3.OperationalError as e:
+                if "locked" in str(e).lower() and attempt < max_retries - 1:
+                    delay = 1 * (2 ** attempt)
+                    logger.warning(f"DB locked, retry {attempt + 1}/{max_retries} after {delay}s")
+                    time.sleep(delay)
+                else:
+                    raise
 
     def retrieve(
         self,
@@ -94,28 +139,61 @@ class MemoryEngine:
         limit: int = 5,
         tags: list[str] | None = None,
     ) -> list[dict]:
-        """Retrieve relevant memories for a query."""
-        query_embedding = self.embedder.embed(query)
+        """Retrieve relevant memories for a query. Never crashes — returns [] on error."""
+        try:
+            query_embedding = self.embedder.embed(query)
+        except Exception as e:
+            logger.warning(f"Embedding failed for query, falling back to keyword search: {e}")
+            # Fall back to keyword search
+            try:
+                return self._keyword_search(query, limit)
+            except Exception as e2:
+                logger.error(f"Keyword search also failed: {e2}")
+                return []
 
-        # Check knowledge cache first
-        facts = lookup_facts(query_embedding, self.db, limit=2)
+        try:
+            # Check knowledge cache first
+            try:
+                facts = lookup_facts(query_embedding, self.db, limit=2)
+            except Exception as e:
+                logger.warning(f"Knowledge cache lookup failed: {e}")
+                facts = []
 
-        # Retrieve from memories
-        memories = retrieve_memories(query_embedding, self.db, strategy, limit, tags)
+            # Retrieve from memories
+            memories = retrieve_memories(query_embedding, self.db, strategy, limit, tags)
 
-        # Follow links for top results to get related context
-        for mem in memories[:3]:
-            linked = follow_links(mem["id"], self.db, depth=1)
-            mem["linked_memories"] = linked
+            # Follow links for top results to get related context
+            for mem in memories[:3]:
+                try:
+                    linked = follow_links(mem["id"], self.db, depth=1)
+                    mem["linked_memories"] = linked
+                except Exception:
+                    mem["linked_memories"] = []
 
-        # Prepend high-confidence facts
-        results: list[dict] = []
-        for f in facts:
-            if f["confidence"] >= 0.7 and f["similarity"] > 0.5:
-                results.append({"type": "fact", **f})
-        results.extend(memories)
+            # Prepend high-confidence facts
+            results: list[dict] = []
+            for f in facts:
+                if f["confidence"] >= 0.7 and f["similarity"] > 0.5:
+                    results.append({"type": "fact", **f})
+            results.extend(memories)
 
-        return results[:limit]
+            return results[:limit]
+        except Exception as e:
+            logger.error(f"Memory retrieval failed: {e}")
+            return []
+
+    def _keyword_search(self, query: str, limit: int = 5) -> list[dict]:
+        """Simple keyword-based fallback search."""
+        words = query.lower().split()[:5]
+        if not words:
+            return []
+        clause = " OR ".join(["content LIKE ?" for _ in words])
+        params = [f"%{w}%" for w in words]
+        rows = self.db.execute(
+            f"SELECT id, content, importance, tags, created_at FROM memories WHERE {clause} LIMIT ?",
+            params + [limit],
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     def feedback(self, memory_id: str, positive: bool = True) -> None:
         """Adjust memory importance based on user feedback."""
@@ -161,7 +239,8 @@ if __name__ == "__main__":
             tags=["domain:python", "topic:oauth2"],
             signals=["technical_detail"],
         )
-        stored = engine.ingest(turn)
+        result = engine.ingest(turn)
+        stored = result.get("stored_ids", []) if isinstance(result, dict) else result
         print(f"Stored {len(stored)} memories: {stored}")
 
         # Ingest another turn
@@ -172,7 +251,8 @@ if __name__ == "__main__":
             tags=["domain:python", "topic:oauth2"],
             signals=["technical_detail"],
         )
-        stored2 = engine.ingest(turn2)
+        result2 = engine.ingest(turn2)
+        stored2 = result2.get("stored_ids", []) if isinstance(result2, dict) else result2
         print(f"Stored {len(stored2)} more memories: {stored2}")
 
         # Retrieve

@@ -48,11 +48,13 @@ class SubAgentPool:
         system_prompt: str = "",
         default_model: str | None = None,
         max_concurrency: int = 5,
+        task_timeout: float = 60.0,
     ):
         self.llm = llm or LLMClient()
         self.system_prompt = system_prompt
         self.default_model = default_model
         self.max_concurrency = max_concurrency
+        self.task_timeout = task_timeout
 
         # Metrics
         self._total_tasks = 0
@@ -82,10 +84,11 @@ class SubAgentPool:
             return_exceptions=True,
         )
 
-        # Convert exceptions to SubResults
+        # Convert exceptions to SubResults — partial results on failure
         final: list[SubResult] = []
         for task, result in zip(tasks, results):
             if isinstance(result, Exception):
+                logger.warning(f"Sub-task {task.id} failed in pool: {result}")
                 final.append(SubResult(
                     task_id=task.id,
                     success=False,
@@ -107,12 +110,23 @@ class SubAgentPool:
         start = time.monotonic()
 
         try:
-            result = await self.llm.generate(
+            result = await asyncio.wait_for(self.llm.generate(
                 system=self.system_prompt,
                 prompt=task.description,
                 model=model or self.default_model,
                 temperature=0.3,
-            )
+            ), timeout=self.task_timeout)
+
+            # Handle LLM error dicts
+            if result.get("error"):
+                duration_ms = (time.monotonic() - start) * 1000
+                self._total_failures += 1
+                return SubResult(
+                    task_id=task.id,
+                    success=False,
+                    error=result.get("message", "LLM error"),
+                    duration_ms=duration_ms,
+                )
 
             duration_ms = (time.monotonic() - start) * 1000
             tokens = result.get("usage", {}).get("total_tokens", 0)

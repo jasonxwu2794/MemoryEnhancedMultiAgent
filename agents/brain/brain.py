@@ -273,7 +273,22 @@ class BrainAgent(BaseAgent):
         """
         Full pipeline for a user message:
         classify → route → (delegate) → respond → gate memory
+
+        Global try/except ensures we never crash — always return a friendly message.
         """
+        try:
+            return await self._handle_user_message_inner(msg)
+        except Exception as e:
+            logger.error(f"Unhandled error in user message pipeline: {e}", exc_info=True)
+            return {
+                "response": "I'm sorry, I hit an unexpected issue processing your message. Could you try again?",
+                "intent": INTENT_SIMPLE_CHAT,
+                "delegated": False,
+                "error": str(e),
+            }
+
+    async def _handle_user_message_inner(self, msg: AgentMessage) -> dict:
+        """Inner pipeline — may raise; caught by _handle_user_message."""
         user_message = msg.payload.get("message", "")
         conversation_id = msg.payload.get("conversation_id", "")
 
@@ -372,7 +387,28 @@ class BrainAgent(BaseAgent):
                 ),
                 temperature=0.2,
             )
+
+            # Handle LLM error dict
+            if result.get("error"):
+                logger.warning(f"Classification LLM error: {result.get('message')}")
+                return {
+                    "intent": INTENT_SIMPLE_CHAT,
+                    "confidence": 0.3,
+                    "reasoning": "Classification LLM call failed",
+                    "subtasks": [],
+                }
+
             classification = result["content"]
+
+            # Handle case where content is not a dict (unparseable)
+            if not isinstance(classification, dict):
+                logger.warning(f"Classification returned non-dict: {type(classification)}")
+                return {
+                    "intent": INTENT_SIMPLE_CHAT,
+                    "confidence": 0.3,
+                    "reasoning": "Classification returned unparseable result",
+                    "subtasks": [],
+                }
 
             # Validate
             if classification.get("intent") not in VALID_INTENTS:
@@ -395,6 +431,18 @@ class BrainAgent(BaseAgent):
 
     # ─── Direct Handling (simple_chat) ────────────────────────────────
 
+    def _estimate_tokens(self, messages: list[dict]) -> int:
+        """Rough token estimate: ~1 token per 4 characters."""
+        return sum(len(m.get("content", "")) for m in messages) // 4
+
+    def _guard_context_window(self, messages: list[dict], max_tokens: int = 100000) -> list[dict]:
+        """If approaching context limit (>85%), truncate from the middle (keep first 2 + last 5)."""
+        estimated = self._estimate_tokens(messages)
+        if estimated > max_tokens * 0.85 and len(messages) > 7:
+            logger.warning(f"Context window guard: ~{estimated} tokens, truncating history")
+            return messages[:2] + messages[-5:]
+        return messages
+
     async def _handle_direct(self, user_message: str) -> dict:
         """
         Handle simple messages directly — no delegation needed.
@@ -416,12 +464,26 @@ class BrainAgent(BaseAgent):
         # Include recent conversation history
         messages.extend(self.conversation_history[-10:])
 
+        # Context window guard
+        messages = self._guard_context_window(messages)
+
         try:
             result = await self.llm.generate(
                 system=self.system_prompt,
                 messages=messages,
                 temperature=0.7,
             )
+
+            # Handle standardized error dicts from LLM client
+            if result.get("error"):
+                logger.error(f"LLM returned error: {result.get('message')}")
+                return {
+                    "response": "I ran into a problem generating a response. Could you rephrase that?",
+                    "intent": INTENT_SIMPLE_CHAT,
+                    "delegated": False,
+                    "error": result.get("message"),
+                }
+
             return {
                 "response": result["content"],
                 "intent": INTENT_SIMPLE_CHAT,
@@ -479,12 +541,22 @@ class BrainAgent(BaseAgent):
                 logger.error(
                     f"Session delegation to {agent_name} failed: {result.error}"
                 )
-                # Fallback: try handling directly
-                return await self._handle_direct(user_message)
+                # Fallback: Brain handles directly
+                fallback = await self._handle_direct(user_message)
+                fallback["response"] += (
+                    f"\n\n_(I handled this directly — my {agent_name} specialist "
+                    f"is temporarily unavailable)_"
+                )
+                return fallback
 
         except Exception as e:
             logger.error(f"Delegation to {agent_name} raised: {e}")
-            return await self._handle_direct(user_message)
+            fallback = await self._handle_direct(user_message)
+            fallback["response"] += (
+                f"\n\n_(I handled this directly — my {agent_name} specialist "
+                f"is temporarily unavailable)_"
+            )
+            return fallback
 
     # ─── Complex Task Handling ────────────────────────────────────────
 
