@@ -189,8 +189,11 @@ class BuilderAgent(BaseAgent):
     3. Multi-component: architect → parallel sub-agent builds → integrate → test
     """
 
-    def __init__(self):
-        super().__init__()
+    role = AgentRole.BUILDER
+    name = "builder"
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self._system_prompt_text: Optional[str] = None
         self._workspace = WORKSPACE_DIR
 

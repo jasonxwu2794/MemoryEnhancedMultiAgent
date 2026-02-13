@@ -199,8 +199,11 @@ class ResearcherAgent(BaseAgent):
     1. decompose → 2. parallel investigate → 3. synthesize → 4. cache facts
     """
 
-    def __init__(self):
-        super().__init__()
+    role = AgentRole.RESEARCHER
+    name = "researcher"
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self._system_prompt_text: Optional[str] = None
         self._knowledge_cache_path = Path(
             os.environ.get("KNOWLEDGE_CACHE_PATH", "/data/knowledge")

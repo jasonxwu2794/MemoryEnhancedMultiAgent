@@ -10,6 +10,7 @@ from typing import Any, Optional
 
 from agents.common.protocol import AgentRole, AgentMessage, TaskStatus, MessageBus
 from agents.common.llm_client import LLMClient
+from agents.common.sub_agent import SubAgentPool
 from memory.engine import MemoryEngine
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,18 @@ class BaseAgent(ABC):
         self.memory: Optional[MemoryEngine] = memory
         self.bus: MessageBus = message_bus or MessageBus()
         self.llm: LLMClient = llm or LLMClient(default_model=self.model)
+
+        # Sub-agent pool (initialised if the subclass declares support)
+        self.sub_pool: Optional[SubAgentPool] = None
+        if self._supports_sub_agents():
+            self.sub_pool = SubAgentPool(
+                llm=self.llm,
+                system_prompt=getattr(self, "sub_agent_system_prompt", ""),
+            )
+
+    def _supports_sub_agents(self) -> bool:
+        """Override to return True if this agent uses sub-agents."""
+        return False
 
     # ─── Abstract interface ───────────────────────────────────────────
 

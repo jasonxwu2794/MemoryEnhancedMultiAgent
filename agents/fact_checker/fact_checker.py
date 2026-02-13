@@ -170,8 +170,11 @@ class FactCheckerAgent(BaseAgent):
     3. Consistency check (multi-angle questioning of a single claim)
     """
 
-    def __init__(self):
-        super().__init__()
+    role = AgentRole.FACT_CHECKER
+    name = "fact_checker"
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self._system_prompt_text: Optional[str] = None
         self._knowledge_cache_path = Path(
             os.environ.get("KNOWLEDGE_CACHE_PATH", "/data/knowledge")

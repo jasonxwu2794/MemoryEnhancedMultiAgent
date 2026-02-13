@@ -142,14 +142,17 @@ class GuardianAgent(BaseAgent):
     The Guardian — security interceptor and cost tracker.
 
     Unlike other agents, the Guardian:
-    - Overrides run() to use listen_intercept (sees ALL traffic)
-    - Also listens on its own channel for direct queries
+    - Polls the SQLite message bus for all completed messages
+    - Also handles direct queries (cost reports, audit)
     - Never uses sub-agents
     - Can BLOCK messages from reaching their destination
     """
 
-    def __init__(self):
-        super().__init__()
+    role = AgentRole.GUARDIAN
+    name = "guardian"
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self._system_prompt_text: Optional[str] = None
 
         # Cost tracking
@@ -193,11 +196,12 @@ class GuardianAgent(BaseAgent):
         """
         Override the standard run loop.
 
-        The Guardian runs TWO listeners concurrently:
-        1. Intercept channel — sees ALL agent messages for security review
-        2. Direct channel — receives queries like cost reports, audit requests
+        The Guardian runs TWO tasks concurrently:
+        1. Intercept polling — polls SQLite bus for completed messages to review
+        2. Direct polling — receives queries like cost reports, audit requests
+        3. Cost reset — periodic counter resets
         """
-        await self.startup()
+        await self.on_startup()
 
         try:
             await asyncio.gather(
@@ -208,17 +212,43 @@ class GuardianAgent(BaseAgent):
         except asyncio.CancelledError:
             logger.info("Guardian shutting down")
         finally:
-            await self.shutdown()
+            await self.on_shutdown()
 
     async def _run_intercept_loop(self):
-        """Monitor ALL agent traffic via the intercept channel."""
-        logger.info("Guardian intercept loop started — monitoring all traffic")
-        await self.bus.listen_intercept(self._handle_intercept)
+        """Poll SQLite bus for all completed messages to review."""
+        logger.info("Guardian intercept loop started — polling all traffic")
+        self._last_scanned_id = 0
+        while True:
+            try:
+                rows = self.bus._db.execute(
+                    "SELECT * FROM message_queue WHERE id > ? AND from_agent != 'guardian' "
+                    "ORDER BY id ASC LIMIT 20",
+                    (self._last_scanned_id,),
+                ).fetchall()
+                for row in rows:
+                    self._last_scanned_id = row["id"]
+                    msg = self.bus.get_task(row["task_id"])
+                    if msg:
+                        await self._handle_intercept(msg)
+            except Exception as e:
+                logger.warning(f"Intercept poll error: {e}")
+            await asyncio.sleep(1.0)
 
     async def _run_direct_loop(self):
-        """Listen for direct queries on agent:guardian channel."""
+        """Poll for direct queries addressed to the Guardian."""
         logger.info("Guardian direct query loop started")
-        await self.bus.listen(self.role, self._handle_message)
+        while True:
+            try:
+                messages = self.bus.receive(AgentRole.GUARDIAN, limit=5)
+                for msg in messages:
+                    result = await self.handle_task(msg)
+                    if result:
+                        self.bus.update_status(
+                            msg.task_id, TaskStatus.COMPLETED, result=result
+                        )
+            except Exception as e:
+                logger.warning(f"Direct poll error: {e}")
+            await asyncio.sleep(1.0)
 
     async def _run_cost_reset_loop(self):
         """Periodically reset hourly counters and check daily rollover."""
@@ -274,7 +304,8 @@ class GuardianAgent(BaseAgent):
         self._track_tokens(msg)
 
         # Skip scanning our own messages to avoid infinite loops
-        if msg.from_agent == AgentRole.GUARDIAN.value:
+        from_val = msg.from_agent.value if isinstance(msg.from_agent, AgentRole) else msg.from_agent
+        if from_val == AgentRole.GUARDIAN.value:
             return
 
         # Skip pending/in-progress messages (scan results, not requests)
@@ -291,7 +322,7 @@ class GuardianAgent(BaseAgent):
                 or msg.result.get("artifacts")
             )
         )
-        from_builder = msg.from_agent == AgentRole.BUILDER.value
+        from_builder = from_val == AgentRole.BUILDER.value
 
         # Phase 1: Fast regex scan (always)
         regex_issues = self._fast_scan(msg)
@@ -333,7 +364,7 @@ class GuardianAgent(BaseAgent):
                 if i["severity"] == "critical"
             )
             msg.block(block_reason or "Security review failed")
-            await self.bus.reply(msg, msg)
+            self.bus.update_status(msg.task_id, TaskStatus.BLOCKED, error=msg.error)
 
         elif verdict == "flag":
             logger.info(
@@ -507,7 +538,7 @@ class GuardianAgent(BaseAgent):
         tokens = usage.get("total_tokens", 0)
 
         if tokens > 0:
-            agent = msg.from_agent
+            agent = msg.from_agent.value if isinstance(msg.from_agent, AgentRole) else msg.from_agent
             self._token_counts[agent] += tokens
             self._hourly_counts[agent] += tokens
 
@@ -570,8 +601,8 @@ class GuardianAgent(BaseAgent):
         # Run all scan types
         # Create a fake message for the scanning functions
         fake_msg = AgentMessage(
-            from_agent="manual",
-            to_agent="guardian",
+            from_agent=AgentRole.GUARDIAN,
+            to_agent=AgentRole.GUARDIAN,
             action="scan",
             result={"artifacts": [{"content": content, "path": "manual_scan"}]},
         )
@@ -702,8 +733,8 @@ class GuardianAgent(BaseAgent):
         event = {
             "timestamp": datetime.utcnow().isoformat(),
             "task_id": msg.task_id,
-            "from_agent": msg.from_agent,
-            "to_agent": msg.to_agent,
+            "from_agent": msg.from_agent.value if isinstance(msg.from_agent, AgentRole) else msg.from_agent,
+            "to_agent": msg.to_agent.value if isinstance(msg.to_agent, AgentRole) else msg.to_agent,
             "action": msg.action,
             "verdict": verdict,
             "issue_count": len(issues),

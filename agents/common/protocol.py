@@ -99,12 +99,18 @@ class AgentMessage:
     status: str = TaskStatus.PENDING.value
     result: Optional[dict[str, Any]] = None
     error: Optional[str] = None
+    metadata: dict[str, Any] = field(default_factory=dict)
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    def block(self, reason: str) -> None:
+        """Mark this message as blocked by the Guardian."""
+        self.status = TaskStatus.BLOCKED.value
+        self.error = reason
 
     def to_json(self) -> str:
         d = asdict(self)
-        d["from_agent"] = self.from_agent.value
-        d["to_agent"] = self.to_agent.value
+        d["from_agent"] = self.from_agent.value if isinstance(self.from_agent, AgentRole) else self.from_agent
+        d["to_agent"] = self.to_agent.value if isinstance(self.to_agent, AgentRole) else self.to_agent
         return json.dumps(d, default=str)
 
     @classmethod
