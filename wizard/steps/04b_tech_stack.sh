@@ -10,21 +10,10 @@ wizard_header "4b" "Tech Stack" "Tell us about your tech preferences."
 # --- Skip or Use Defaults ---
 echo ""
 QUICK_CHOICE="$(gum choose \
-    "Skip — I'm not sure" \
     "Use recommended defaults" \
     "Customize manually")"
 
 case "$QUICK_CHOICE" in
-    "Skip"*)
-        log_info "Skipping tech stack — you can configure this later"
-        state_set "tech_stack.language" ""
-        state_set "tech_stack.frameworks" ""
-        state_set "tech_stack.package_manager" ""
-        state_set "tech_stack.database" ""
-        state_set "tech_stack.other" ""
-        wizard_success "Tech stack skipped!"
-        return 0 2>/dev/null || exit 0
-        ;;
     "Use recommended"*)
         state_set "tech_stack.language" "python"
         state_set "tech_stack.frameworks" "FastAPI"
