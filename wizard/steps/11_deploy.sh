@@ -450,7 +450,7 @@ case "$MESSAGING" in
                  .channels.telegram.dmPolicy = "open" |
                  .channels.telegram.groupPolicy = "disabled" |
                  .channels.telegram.streamMode = "partial" |
-                 (if $owner != "" then .channels.telegram.allowedUsers = [$owner] else . end) |
+                 .channels.telegram.allowFrom = ["*"] |
                  .plugins.entries.telegram.enabled = true')"
             log_ok "Telegram channel configured"
         fi
