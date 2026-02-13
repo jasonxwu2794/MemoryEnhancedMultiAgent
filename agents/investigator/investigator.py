@@ -1,10 +1,10 @@
 """
-OpenClaw Distro — Researcher Agent (Analyst / Librarian)
+OpenClaw Distro — Investigator Agent (Analyst / Librarian)
 
-The Researcher gathers information from multiple sources in parallel and
+The Investigator gathers information from multiple sources in parallel and
 synthesizes it into a coherent research brief.
 
-Key difference from other agents: the Researcher ALWAYS uses sub-agents.
+Key difference from other agents: the Investigator ALWAYS uses sub-agents.
 Every research query is decomposed into 3–6 independent investigation
 threads that run in parallel, then synthesized.
 
@@ -189,18 +189,18 @@ Respond with ONLY a JSON object:
 """
 
 
-# ─── Researcher Agent ─────────────────────────────────────────────────────────
+# ─── Investigator Agent ─────────────────────────────────────────────────────────
 
-class ResearcherAgent(BaseAgent):
+class InvestigatorAgent(BaseAgent):
     """
-    The Researcher — always-parallel investigation agent.
+    The Investigator — always-parallel investigation agent.
 
     Every request flows through:
     1. decompose → 2. parallel investigate → 3. synthesize → 4. cache facts
     """
 
-    role = AgentRole.RESEARCHER
-    name = "researcher"
+    role = AgentRole.INVESTIGATOR
+    name = "investigator"
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -219,14 +219,14 @@ class ResearcherAgent(BaseAgent):
                 self._system_prompt_text = prompt_path.read_text()
             else:
                 self._system_prompt_text = (
-                    "You are the Researcher agent. Investigate thoroughly, "
+                    "You are the Investigator agent. Investigate thoroughly, "
                     "synthesize from multiple sources, and flag knowledge gaps. "
                     "Respond with ONLY valid JSON."
                 )
         return self._system_prompt_text
 
     def _supports_sub_agents(self) -> bool:
-        """Researcher ALWAYS uses sub-agents."""
+        """Investigator ALWAYS uses sub-agents."""
         return True
 
     @property
@@ -251,13 +251,13 @@ class ResearcherAgent(BaseAgent):
         elif action == "compare":
             return await self._handle_research(query, original_request, context)
         else:
-            logger.warning(f"Researcher received unknown action: {action}")
+            logger.warning(f"Investigator received unknown action: {action}")
             return await self._handle_research(query, original_request, context)
 
     async def on_startup(self):
         """Ensure knowledge cache directory exists."""
         self._knowledge_cache_path.mkdir(parents=True, exist_ok=True)
-        logger.info("Researcher agent ready")
+        logger.info("Investigator agent ready")
 
     # ─── Main Research Pipeline ───────────────────────────────────────
 
@@ -692,7 +692,7 @@ class ResearcherAgent(BaseAgent):
                 category=fact_entry.get("category", "general"),
                 source=fact_entry.get("source"),
                 confidence=confidence,
-                verified_by="researcher",
+                verified_by="investigator",
                 tags=fact_entry.get("tags", []),
             )
             return True

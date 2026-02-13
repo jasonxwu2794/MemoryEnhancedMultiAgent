@@ -27,8 +27,8 @@ MESSAGING="$(state_get 'messaging' 'cli')"
 
 MODEL_BRAIN="$(state_get 'models.brain' 'claude-sonnet-4')"
 MODEL_BUILDER="$(state_get 'models.builder' 'deepseek-v3')"
-MODEL_SCOUT="$(state_get 'models.scout' 'qwen-max')"
-MODEL_CHECKER="$(state_get 'models.checker' 'qwen-max')"
+MODEL_INVESTIGATOR="$(state_get 'models.investigator' 'qwen-max')"
+MODEL_JUDGE="$(state_get 'models.judge' 'qwen-max')"
 MODEL_GUARDIAN="$(state_get 'models.guardian' 'claude-sonnet-4')"
 
 # --- Ensure directories ---
@@ -102,8 +102,8 @@ cat > "$OC_WORKSPACE/SOUL.md" << SOULEOF
 
 ### Delegation Rules
 - Route code tasks to Builder via subagent spawn
-- Route research to Scout via subagent spawn
-- Route verification to Checker via subagent spawn
+- Route research to Investigator via subagent spawn
+- Route verification to Judge via subagent spawn
 - Consult Guardian on safety-sensitive operations via subagent spawn
 
 ### Context Scoping
@@ -145,7 +145,7 @@ log_ok "Brain SOUL.md generated"
 # Generate other agent SOUL.md files in workspace
 # ============================================================
 mkdir -p "$OC_WORKSPACE/agents/brain" "$OC_WORKSPACE/agents/builder" \
-         "$OC_WORKSPACE/agents/scout" "$OC_WORKSPACE/agents/checker" \
+         "$OC_WORKSPACE/agents/investigator" "$OC_WORKSPACE/agents/judge" \
          "$OC_WORKSPACE/agents/guardian"
 
 # Copy Brain SOUL.md into agents dir too
@@ -170,11 +170,11 @@ You are Builder, the code generation and execution specialist.
 - Comment complex logic
 EOF
 
-cat > "$OC_WORKSPACE/agents/scout/SOUL.md" << 'EOF'
-# SOUL.md — Scout 🔬
+cat > "$OC_WORKSPACE/agents/investigator/SOUL.md" << 'EOF'
+# SOUL.md — Investigator 🔍
 
 ## Role
-You are Scout, the research and synthesis specialist.
+You are Investigator, the research and synthesis specialist.
 
 ## Responsibilities
 - Search the web for relevant information
@@ -189,11 +189,11 @@ You are Scout, the research and synthesis specialist.
 - Flag conflicting information
 EOF
 
-cat > "$OC_WORKSPACE/agents/checker/SOUL.md" << 'EOF'
-# SOUL.md — Checker ✅
+cat > "$OC_WORKSPACE/agents/judge/SOUL.md" << 'EOF'
+# SOUL.md — Judge ⚖️
 
 ## Role
-You are Checker, the fact verification and accuracy specialist.
+You are Judge, the fact verification and accuracy specialist.
 
 ## Responsibilities
 - Verify claims and statements for accuracy
@@ -230,6 +230,62 @@ EOF
 log_ok "Agent SOUL.md files generated"
 
 # ============================================================
+# Generate agent config.yaml files (model + tools per agent)
+# ============================================================
+log_info "Generating agent config.yaml files..."
+
+brain_model_id_for() {
+    local model="$1"
+    case "$model" in
+        claude-sonnet-4)     echo "anthropic/claude-sonnet-4-20250514" ;;
+        claude-opus-4)       echo "anthropic/claude-opus-4-20250514" ;;
+        deepseek-v3)         echo "deepseek/deepseek-chat" ;;
+        qwen-max)            echo "alibaba/qwen-max" ;;
+        kimi*)               echo "moonshot/kimi" ;;
+        minimax*)            echo "minimax/minimax" ;;
+        codestral*)          echo "mistral/codestral" ;;
+        *)                   echo "$model" ;;
+    esac
+}
+
+# Builder config
+cat > "$OC_WORKSPACE/agents/builder/config.yaml" << EOF
+model: $(brain_model_id_for "$MODEL_BUILDER")
+tools:
+  - exec
+  - read
+  - write
+  - edit
+EOF
+
+# Investigator config
+cat > "$OC_WORKSPACE/agents/investigator/config.yaml" << EOF
+model: $(brain_model_id_for "$MODEL_INVESTIGATOR")
+tools:
+  - web_search
+  - web_fetch
+  - read
+EOF
+
+# Judge config
+cat > "$OC_WORKSPACE/agents/judge/config.yaml" << EOF
+model: $(brain_model_id_for "$MODEL_JUDGE")
+tools:
+  - web_search
+  - web_fetch
+  - read
+EOF
+
+# Guardian config
+cat > "$OC_WORKSPACE/agents/guardian/config.yaml" << EOF
+model: $(brain_model_id_for "$MODEL_GUARDIAN")
+tools:
+  - read
+EOF
+
+log_ok "Agent config.yaml files generated"
+
+# ============================================================
 # 3. Configure API keys in auth-profiles.json
 # ============================================================
 log_info "Configuring API credentials..."
@@ -252,7 +308,7 @@ model_to_provider() {
 
 # Collect unique providers needed
 declare -A NEEDED_PROVIDERS
-for model_var in MODEL_BRAIN MODEL_BUILDER MODEL_SCOUT MODEL_CHECKER MODEL_GUARDIAN; do
+for model_var in MODEL_BRAIN MODEL_BUILDER MODEL_INVESTIGATOR MODEL_JUDGE MODEL_GUARDIAN; do
     provider="$(model_to_provider "${!model_var}")"
     NEEDED_PROVIDERS["$provider"]=1
 done
@@ -427,12 +483,12 @@ Use OpenClaw's subagent spawn to delegate tasks. Each subagent runs in its own s
 - Context: Give it the task + relevant code/files
 - Example: "Write a Python script that...", "Fix this bug in...", "Deploy to..."
 
-**Scout 🔬** — Research & Synthesis
+**Investigator 🔍** — Research & Synthesis
 - Spawn for: web research, fact-finding, summarizing sources, comparing options
 - Context: Give it the research question + any constraints
 - Example: "Research the best...", "Find documentation for...", "Compare X vs Y"
 
-**Checker ✅** — Verification & QA
+**Judge ⚖️** — Verification & QA
 - Spawn for: fact-checking claims, reviewing code, validating data, proofreading
 - Context: Give it the content to verify + what to check for
 - Example: "Verify these claims...", "Review this code for bugs...", "Check these numbers"
@@ -444,8 +500,8 @@ Use OpenClaw's subagent spawn to delegate tasks. Each subagent runs in its own s
 
 ### Delegation Rules
 - **Code tasks** → Builder (always)
-- **Research** → Scout (always)
-- **Fact-checking** → Checker (when accuracy matters)
+- **Research** → Investigator (always)
+- **Fact-checking** → Judge (when accuracy matters)
 - **Security-sensitive ops** → Guardian (when risk exists)
 - **Simple questions** → Handle yourself (don't over-delegate)
 - **Complex tasks** → Split across multiple agents in parallel
@@ -453,9 +509,9 @@ Use OpenClaw's subagent spawn to delegate tasks. Each subagent runs in its own s
 ### Response Synthesis
 When subagents return results:
 - Integrate findings into a natural, cohesive response
-- Don't say "Builder reports..." or "According to Scout..."
+- Don't say "Builder reports..." or "According to Investigator..."
 - Present it as your own knowledge, seamlessly
-- If agents disagree, use your judgment or ask Checker to verify
+- If agents disagree, use your judgment or ask Judge to verify
 
 ## Memory System
 
@@ -536,8 +592,8 @@ gum style \
     "  👤 User:     $USER_NAME ($USER_PREF)" \
     "  🧠 Brain:    $BRAIN_NAME ($MODEL_BRAIN)" \
     "  🔨 Builder:  $MODEL_BUILDER" \
-    "  🔬 Scout:    $MODEL_SCOUT" \
-    "  ✅ Checker:  $MODEL_CHECKER" \
+    "  🔍 Investigator:    $MODEL_INVESTIGATOR" \
+    "  ⚖️ Judge:  $MODEL_JUDGE" \
     "  🛡️ Guardian: $MODEL_GUARDIAN" \
     "  💾 Memory:   $MEMORY_TIER" \
     "  💬 Channel:  $MESSAGING" \

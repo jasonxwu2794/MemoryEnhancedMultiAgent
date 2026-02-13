@@ -22,6 +22,7 @@ from agents.common.base_agent import BaseAgent
 from agents.common.protocol import (
     AgentRole, AgentMessage, TaskStatus, ContextScope,
 )
+from agents.session_manager import AgentSessionManager, DelegationTask
 from memory.engine import MemoryEngine, Turn
 
 logger = logging.getLogger(__name__)
@@ -49,8 +50,8 @@ MAX_CONVERSATION_HISTORY = 50
 # Delegation timeout per agent type (seconds)
 DELEGATION_TIMEOUTS = {
     AgentRole.BUILDER: 180.0,       # Code gen can take a while
-    AgentRole.FACT_CHECKER: 90.0,
-    AgentRole.RESEARCHER: 120.0,
+    AgentRole.JUDGE: 90.0,
+    AgentRole.INVESTIGATOR: 120.0,
 }
 
 # ─── Classification Prompt ────────────────────────────────────────────────────
@@ -80,7 +81,7 @@ Respond with ONLY this JSON:
   "reasoning": "<one sentence>",
   "subtasks": [
     {{
-      "agent": "builder|fact_checker|researcher",
+      "agent": "builder|judge|investigator",
       "action": "<verb phrase>",
       "description": "<what this subtask accomplishes>",
       "depends_on": [<indices of subtasks this depends on, empty if independent>]
@@ -98,8 +99,8 @@ Break this complex task into ordered subtasks for specialist agents.
 
 Available agents:
 - builder: Code generation, file operations, tool execution. NO internet. Good at code.
-- fact_checker: Claim verification, source checking. Has web access. Good at precision.
-- researcher: Information gathering, multi-source synthesis. Has web access. Good at breadth.
+- judge: Claim verification, source checking. Has web access. Good at precision.
+- investigator: Information gathering, multi-source synthesis. Has web access. Good at breadth.
 
 Task: {task_description}
 
@@ -115,7 +116,7 @@ Respond with ONLY this JSON:
 {{
   "subtasks": [
     {{
-      "agent": "builder|fact_checker|researcher",
+      "agent": "builder|judge|investigator",
       "action": "<action verb>",
       "description": "<detailed task description with enough context to execute independently>",
       "depends_on": []
@@ -137,7 +138,7 @@ Agent results:
 
 Rules:
 1. Lead with the most important/requested information
-2. If the Fact Checker made corrections, incorporate them naturally (don't say "the fact checker found...")
+2. If the Judge made corrections, incorporate them naturally (don't say "the judge found...")
 3. If confidence is low on any claim, note the uncertainty naturally
 4. If the Guardian flagged issues, address them
 5. The user should NOT know about the multi-agent system — write as one unified voice
@@ -216,6 +217,7 @@ class BrainAgent(BaseAgent):
         super().__init__(memory=memory, **kwargs)
         self.conversation_history: list[dict] = []
         self._system_prompt_text: Optional[str] = None
+        self.session_manager = AgentSessionManager()
 
     # ─── BaseAgent interface ──────────────────────────────────────────
 
@@ -307,17 +309,17 @@ class BrainAgent(BaseAgent):
         elif intent == INTENT_FACTUAL:
             response = await self._handle_single_agent(
                 user_message=user_message,
-                agent=AgentRole.FACT_CHECKER,
+                agent=AgentRole.JUDGE,
                 action="verify",
-                context_fn=self._scope_fact_checker_context,
+                context_fn=self._scope_judge_context,
             )
 
         elif intent == INTENT_RESEARCH:
             response = await self._handle_single_agent(
                 user_message=user_message,
-                agent=AgentRole.RESEARCHER,
+                agent=AgentRole.INVESTIGATOR,
                 action="research",
-                context_fn=self._scope_researcher_context,
+                context_fn=self._scope_investigator_context,
             )
 
         elif intent == INTENT_COMPLEX:
@@ -445,56 +447,43 @@ class BrainAgent(BaseAgent):
         context_fn: callable,
     ) -> dict:
         """
-        Delegate to a single specialist agent and return its result.
+        Delegate to a single specialist agent via OpenClaw session spawning.
         The Brain scopes the context before sending.
         """
         # Build scoped context
         context = context_fn(user_message)
-
+        agent_name = agent.value  # e.g. "builder", "investigator", "judge"
         timeout = DELEGATION_TIMEOUTS.get(agent, 120.0)
 
         try:
-            reply = await self.delegate(
-                to_agent=agent,
-                action=action,
-                payload={"message": user_message},
+            result = await self.session_manager.delegate(
+                agent_name=agent_name,
+                task=user_message,
                 context=context,
                 timeout=timeout,
             )
 
-            if reply.status == TaskStatus.COMPLETED.value:
-                # Synthesize the agent's result into a user-facing response
+            if result.success:
+                # Parse the session result and synthesize
+                try:
+                    agent_result = json.loads(result.result)
+                except (json.JSONDecodeError, TypeError):
+                    agent_result = {"content": result.result}
+
                 return await self._synthesize_single(
                     user_message=user_message,
                     agent_role=agent,
-                    agent_result=reply.result,
+                    agent_result=agent_result,
                 )
-
-            elif reply.status == TaskStatus.BLOCKED.value:
-                logger.warning(
-                    f"Guardian blocked {agent.value} response: {reply.error}"
-                )
-                return {
-                    "response": (
-                        "I generated a response but it was flagged for security "
-                        "review. Let me try a different approach."
-                    ),
-                    "intent": action,
-                    "delegated": True,
-                    "blocked": True,
-                    "blocked_reason": reply.error,
-                }
-
             else:
-                # Failed
                 logger.error(
-                    f"Delegation to {agent.value} failed: {reply.error}"
+                    f"Session delegation to {agent_name} failed: {result.error}"
                 )
                 # Fallback: try handling directly
                 return await self._handle_direct(user_message)
 
         except Exception as e:
-            logger.error(f"Delegation to {agent.value} raised: {e}")
+            logger.error(f"Delegation to {agent_name} raised: {e}")
             return await self._handle_direct(user_message)
 
     # ─── Complex Task Handling ────────────────────────────────────────
@@ -546,28 +535,31 @@ class BrainAgent(BaseAgent):
                         k: v.get("result", {}) for k, v in all_results.items()
                     }
 
-                delegation_tasks.append({
-                    "to": agent_role,
-                    "action": task.get("action", "execute"),
-                    "payload": {
-                        "message": task["description"],
-                        "original_request": user_message,
-                    },
-                    "context": task_context,
-                })
+                delegation_tasks.append(DelegationTask(
+                    agent_name=agent_str,
+                    task=f"{task['description']}\n\nOriginal request: {user_message}",
+                    context=task_context,
+                ))
 
-            # Execute layer in parallel
-            replies = await self.delegate_parallel(delegation_tasks)
+            # Execute layer in parallel via session spawning
+            replies = await self.session_manager.delegate_parallel(
+                delegation_tasks, timeout=180.0
+            )
 
             # Collect results
             for task, reply in zip(layer, replies):
                 task_key = f"{task['agent']}_{task['action']}"
+                try:
+                    parsed_result = json.loads(reply.result) if reply.result else None
+                except (json.JSONDecodeError, TypeError):
+                    parsed_result = {"content": reply.result} if reply.result else None
+
                 all_results[task_key] = {
                     "agent": task["agent"],
                     "action": task["action"],
                     "description": task["description"],
-                    "status": reply.status,
-                    "result": reply.result,
+                    "status": TaskStatus.COMPLETED.value if reply.success else TaskStatus.FAILED.value,
+                    "result": parsed_result,
                     "error": reply.error,
                 }
 
@@ -856,8 +848,8 @@ class BrainAgent(BaseAgent):
             tools=[],  # TODO: populate from config
         )
 
-    def _scope_fact_checker_context(self, user_message: str) -> dict:
-        """Prepare scoped context for the Fact Checker agent."""
+    def _scope_judge_context(self, user_message: str) -> dict:
+        """Prepare scoped context for the Judge agent."""
         # Extract claims from the user message and recent conversation
         knowledge_excerpts = []
         if self.memory:
@@ -872,15 +864,15 @@ class BrainAgent(BaseAgent):
             except Exception:
                 pass
 
-        return ContextScope.for_fact_checker(
+        return ContextScope.for_judge(
             claims=[user_message],
             knowledge_excerpts=knowledge_excerpts,
         )
 
-    def _scope_researcher_context(self, user_message: str) -> dict:
-        """Prepare scoped context for the Researcher agent."""
+    def _scope_investigator_context(self, user_message: str) -> dict:
+        """Prepare scoped context for the Investigator agent."""
         knowledge_gaps = []  # Could be populated from conversation analysis
-        return ContextScope.for_researcher(
+        return ContextScope.for_investigator(
             query=user_message,
             knowledge_gaps=knowledge_gaps,
         )
@@ -889,10 +881,10 @@ class BrainAgent(BaseAgent):
         """Return the appropriate context scoping function for an agent."""
         mapping = {
             AgentRole.BUILDER: self._scope_builder_context,
-            AgentRole.FACT_CHECKER: self._scope_fact_checker_context,
-            AgentRole.RESEARCHER: self._scope_researcher_context,
+            AgentRole.JUDGE: self._scope_judge_context,
+            AgentRole.INVESTIGATOR: self._scope_investigator_context,
         }
-        return mapping.get(agent_role, self._scope_researcher_context)
+        return mapping.get(agent_role, self._scope_investigator_context)
 
     # ─── Memory Retrieval ─────────────────────────────────────────────
 
@@ -961,8 +953,8 @@ class BrainAgent(BaseAgent):
         """Convert a string agent name to AgentRole enum."""
         mapping = {
             "builder": AgentRole.BUILDER,
-            "fact_checker": AgentRole.FACT_CHECKER,
-            "researcher": AgentRole.RESEARCHER,
+            "judge": AgentRole.JUDGE,
+            "investigator": AgentRole.INVESTIGATOR,
             "guardian": AgentRole.GUARDIAN,
         }
         return mapping.get(agent_str, AgentRole.BUILDER)

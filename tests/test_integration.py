@@ -49,8 +49,8 @@ modules_to_import = [
     ("agents.common.web_search", "WebSearchClient"),
     ("agents.brain.brain", "BrainAgent"),
     ("agents.builder.builder", "BuilderAgent"),
-    ("agents.researcher.researcher", "ResearcherAgent"),
-    ("agents.fact_checker.fact_checker", "FactCheckerAgent"),
+    ("agents.investigator.investigator", "InvestigatorAgent"),
+    ("agents.judge.judge", "JudgeAgent"),
     ("agents.guardian.guardian", "GuardianAgent"),
 ]
 
@@ -231,7 +231,7 @@ with tempfile.TemporaryDirectory() as tmpdir:
     fact_id = store_fact(
         fact="Python was created by Guido van Rossum in 1991",
         embedding=fact_embedding,
-        source_agent="fact_checker",
+        source_agent="judge",
         confidence=0.95,
         db=engine.db,
     )
@@ -382,8 +382,8 @@ print("=" * 60)
 
 from agents.brain.brain import BrainAgent
 from agents.builder.builder import BuilderAgent
-from agents.researcher.researcher import ResearcherAgent
-from agents.fact_checker.fact_checker import FactCheckerAgent
+from agents.investigator.investigator import InvestigatorAgent
+from agents.judge.judge import JudgeAgent
 from agents.guardian.guardian import GuardianAgent
 
 with tempfile.TemporaryDirectory() as tmpdir:
@@ -394,9 +394,9 @@ with tempfile.TemporaryDirectory() as tmpdir:
          {"memory_db_path": os.path.join(tmpdir, "mem.db"), "message_bus": bus}),
         ("BuilderAgent", BuilderAgent, AgentRole.BUILDER, "builder",
          {"message_bus": bus}),
-        ("ResearcherAgent", ResearcherAgent, AgentRole.RESEARCHER, "researcher",
+        ("InvestigatorAgent", InvestigatorAgent, AgentRole.INVESTIGATOR, "investigator",
          {"message_bus": bus}),
-        ("FactCheckerAgent", FactCheckerAgent, AgentRole.FACT_CHECKER, "fact_checker",
+        ("JudgeAgent", JudgeAgent, AgentRole.JUDGE, "judge",
          {"message_bus": bus}),
         ("GuardianAgent", GuardianAgent, AgentRole.GUARDIAN, "guardian",
          {"message_bus": bus}),
@@ -415,21 +415,21 @@ with tempfile.TemporaryDirectory() as tmpdir:
     print("\n  --- Permission Matrix ---")
     brain = BrainAgent(memory_db_path=os.path.join(tmpdir, "mem2.db"), message_bus=bus)
     builder = BuilderAgent(message_bus=bus)
-    researcher = ResearcherAgent(message_bus=bus)
-    fact_checker = FactCheckerAgent(message_bus=bus)
+    investigator = InvestigatorAgent(message_bus=bus)
+    judge = JudgeAgent(message_bus=bus)
     guardian = GuardianAgent(message_bus=bus)
 
     report("Brain CAN write memory", brain.can_write_memory)
     report("Builder CANNOT write memory", not builder.can_write_memory)
-    report("Researcher CANNOT write memory", not researcher.can_write_memory)
-    report("FactChecker CANNOT write memory", not fact_checker.can_write_memory)
+    report("Investigator CANNOT write memory", not investigator.can_write_memory)
+    report("Judge CANNOT write memory", not judge.can_write_memory)
     report("Guardian CANNOT write memory", not guardian.can_write_memory)
 
     report("Builder CAN execute code", builder.can_execute_code)
     report("Brain CANNOT execute code", not brain.can_execute_code)
 
-    report("Researcher CAN access web", researcher.can_access_web)
-    report("FactChecker CAN access web", fact_checker.can_access_web)
+    report("Investigator CAN access web", investigator.can_access_web)
+    report("Judge CAN access web", judge.can_access_web)
     report("Builder CANNOT access web", not builder.can_access_web)
     report("Brain CANNOT access web", not brain.can_access_web)
     report("Guardian CANNOT access web", not guardian.can_access_web)
