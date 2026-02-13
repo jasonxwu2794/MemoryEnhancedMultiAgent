@@ -13,6 +13,7 @@ declare -A PROVIDER_NAMES=(
     [alibaba]="Alibaba (Qwen)"
     [minimax]="MiniMax"
     [deepseek]="DeepSeek"
+    [google]="Google (Gemini)"
     [mistral]="Mistral (Codestral)"
 )
 
@@ -22,15 +23,17 @@ declare -A PROVIDER_URLS=(
     [alibaba]="https://dashscope.console.aliyun.com/apiKey"
     [minimax]="https://www.minimaxi.com/platform"
     [deepseek]="https://platform.deepseek.com/api_keys"
+    [google]="https://aistudio.google.com/apikey"
     [mistral]="https://console.mistral.ai/api-keys"
 )
 
 declare -A PROVIDER_VALIDATE_URL=(
     [anthropic]="https://api.anthropic.com/v1/messages"
-    [moonshot]="https://api.moonshot.cn/v1/models"
+    [moonshot]="https://api.moonshot.ai/v1/models"
     [alibaba]="https://dashscope.aliyuncs.com/api/v1/models"
     [minimax]="https://api.minimax.chat/v1/models"
     [deepseek]="https://api.deepseek.com/v1/models"
+    [google]="https://generativelanguage.googleapis.com/v1beta/models?key=API_KEY"
     [mistral]="https://api.mistral.ai/v1/models"
 )
 
@@ -40,6 +43,19 @@ declare -A SEEN_PROVIDERS
 
 for agent in brain builder researcher verifier guardian; do
     provider="$(state_get "providers.$agent" '')"
+
+    # Handle dual-model researcher (JSON object with thinking/instant)
+    if echo "$provider" | grep -q '"thinking"' 2>/dev/null; then
+        for sub in thinking instant; do
+            sub_provider="$(echo "$provider" | jq -r ".$sub" 2>/dev/null || echo "")"
+            if [ -n "$sub_provider" ] && [ -z "${SEEN_PROVIDERS[$sub_provider]:-}" ]; then
+                REQUIRED_PROVIDERS+=("$sub_provider")
+                SEEN_PROVIDERS[$sub_provider]=1
+            fi
+        done
+        continue
+    fi
+
     if [ -n "$provider" ] && [ -z "${SEEN_PROVIDERS[$provider]:-}" ]; then
         REQUIRED_PROVIDERS+=("$provider")
         SEEN_PROVIDERS[$provider]=1
