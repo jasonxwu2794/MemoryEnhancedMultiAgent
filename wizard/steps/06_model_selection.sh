@@ -6,6 +6,36 @@
 
 wizard_header "6" "Model Selection" "Choose which AI model powers each agent."
 
+# --- Use Defaults Option ---
+echo ""
+QUICK_CHOICE="$(gum choose \
+    "Use recommended defaults" \
+    "Customize manually")"
+
+if [ "$QUICK_CHOICE" = "Use recommended defaults" ]; then
+    state_set "models.brain" "claude-opus-4-6"
+    state_set "providers.brain" "anthropic"
+    state_set "models.builder" "deepseek-reasoner"
+    state_set "providers.builder" "deepseek"
+    state_set "models.researcher.thinking" "kimi-k2.5-thinking"
+    state_set "providers.researcher.thinking" "moonshot"
+    state_set "models.researcher.instant" "kimi-k2.5-instant"
+    state_set "providers.researcher.instant" "moonshot"
+    state_set "models.verifier" "deepseek-reasoner"
+    state_set "providers.verifier" "deepseek"
+    state_set "models.guardian" "deepseek-chat"
+    state_set "providers.guardian" "deepseek"
+    wizard_divider
+    gum style --bold "Model Selection (defaults):"
+    echo "  🧠 Brain:       Claude Opus 4.6"
+    echo "  🔨 Builder:     DeepSeek V3.2 Reasoner"
+    echo "  🔬 Researcher:  Kimi K2.5 Thinking + Instant"
+    echo "  ✅ Verifier:    DeepSeek V3.2 Reasoner"
+    echo "  🛡️ Guardian:    DeepSeek V3.2 Chat"
+    wizard_success "Model defaults applied!"
+    return 0 2>/dev/null || exit 0
+fi
+
 # --- Model definitions ---
 MODELS=(
     "Claude Opus 4.6|claude-opus-4-6|anthropic|~\$40-80/mo|██████████|💰💰💰 Best brain money can buy"
@@ -49,13 +79,45 @@ for m in "${MODELS[@]}"; do
     MODEL_NAMES+=("$name  $cost  $bar")
 done
 
+# --- Curated picks per agent role ---
+declare -A CURATED_MODELS
+CURATED_MODELS[brain]="Claude Opus 4.6,Claude Sonnet 4.5,Kimi K2.5 Thinking"
+CURATED_MODELS[builder]="DeepSeek V3.2 Reasoner,Gemini 2.5 Pro,Gemini 3 Pro"
+CURATED_MODELS[researcher_thinking]="Kimi K2.5 Thinking,DeepSeek V3.2 Reasoner,Gemini 2.5 Pro"
+CURATED_MODELS[researcher_instant]="Kimi K2.5 Instant,DeepSeek V3.2 Chat,Qwen3 Plus"
+CURATED_MODELS[verifier]="DeepSeek V3.2 Reasoner,Kimi K2.5 Thinking,Gemini 2.5 Pro"
+CURATED_MODELS[guardian]="DeepSeek V3.2 Chat,Qwen3 Plus,Kimi K2.5 Instant"
+
 _select_model() {
     local header="$1"
     local default_name="$2"
+    local curated_key="${3:-}"
+
+    # Build curated list if available
+    local USE_CURATED=()
+    if [ -n "$curated_key" ] && [ -n "${CURATED_MODELS[$curated_key]:-}" ]; then
+        IFS=',' read -ra CURATED_NAMES <<< "${CURATED_MODELS[$curated_key]}"
+        for cname in "${CURATED_NAMES[@]}"; do
+            for entry in "${MODEL_NAMES[@]}"; do
+                if [[ "$entry" == "$cname"* ]]; then
+                    USE_CURATED+=("$entry")
+                    break
+                fi
+            done
+        done
+        USE_CURATED+=("⚙️  Show all models...")
+    fi
+
+    local DISPLAY_LIST=()
+    if [ ${#USE_CURATED[@]} -gt 0 ]; then
+        DISPLAY_LIST=("${USE_CURATED[@]}")
+    else
+        DISPLAY_LIST=("${MODEL_NAMES[@]}")
+    fi
 
     SELECTED_FLAG=()
     if [ -n "$default_name" ]; then
-        for entry in "${MODEL_NAMES[@]}"; do
+        for entry in "${DISPLAY_LIST[@]}"; do
             if [[ "$entry" == "$default_name"* ]]; then
                 SELECTED_FLAG=(--selected "$entry")
                 break
@@ -63,7 +125,22 @@ _select_model() {
         done
     fi
 
-    CHOICE="$(gum choose --header "$header" "${SELECTED_FLAG[@]}" "${MODEL_NAMES[@]}")"
+    CHOICE="$(gum choose --header "$header" "${SELECTED_FLAG[@]}" "${DISPLAY_LIST[@]}")"
+
+    # If "Show all models" selected, re-show with full list
+    if [[ "$CHOICE" == *"Show all models"* ]]; then
+        SELECTED_FLAG=()
+        if [ -n "$default_name" ]; then
+            for entry in "${MODEL_NAMES[@]}"; do
+                if [[ "$entry" == "$default_name"* ]]; then
+                    SELECTED_FLAG=(--selected "$entry")
+                    break
+                fi
+            done
+        fi
+        CHOICE="$(gum choose --header "$header" "${SELECTED_FLAG[@]}" "${MODEL_NAMES[@]}")"
+    fi
+
     CHOSEN_NAME="$(echo "$CHOICE" | sed 's/  .*//')"
     CHOSEN_SLUG=""
     CHOSEN_PROVIDER=""
@@ -88,7 +165,7 @@ for agent in "${AGENT_ORDER[@]}"; do
         if [ -z "$PREV_T" ] && is_recommended; then
             PREV_T="${DEFAULTS[researcher_thinking]}"
         fi
-        _select_model "Select THINKING model (for planning & synthesis):" "$PREV_T"
+        _select_model "Select THINKING model (for planning & synthesis):" "$PREV_T" "researcher_thinking"
         state_set "models.researcher.thinking" "$CHOSEN_SLUG"
         state_set "providers.researcher.thinking" "$CHOSEN_PROVIDER"
         log_ok "researcher (thinking) → $CHOSEN_NAME ($CHOSEN_SLUG)"
@@ -97,7 +174,7 @@ for agent in "${AGENT_ORDER[@]}"; do
         if [ -z "$PREV_I" ] && is_recommended; then
             PREV_I="${DEFAULTS[researcher_instant]}"
         fi
-        _select_model "Select INSTANT model (for parallel investigations):" "$PREV_I"
+        _select_model "Select INSTANT model (for parallel investigations):" "$PREV_I" "researcher_instant"
         state_set "models.researcher.instant" "$CHOSEN_SLUG"
         state_set "providers.researcher.instant" "$CHOSEN_PROVIDER"
         log_ok "researcher (instant) → $CHOSEN_NAME ($CHOSEN_SLUG)"
@@ -108,7 +185,7 @@ for agent in "${AGENT_ORDER[@]}"; do
             PREV="${DEFAULTS[$agent]}"
         fi
 
-        _select_model "Select model:" "$PREV"
+        _select_model "Select model:" "$PREV" "$agent"
         state_set "models.$agent" "$CHOSEN_SLUG"
         state_set "providers.$agent" "$CHOSEN_PROVIDER"
         log_ok "$agent → $CHOSEN_NAME ($CHOSEN_SLUG)"

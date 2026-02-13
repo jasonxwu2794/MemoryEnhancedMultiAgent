@@ -158,6 +158,10 @@ cat > "$OC_WORKSPACE/SOUL.md" << SOULEOF
 ### Personality
 ${BRAIN_NOTES:-No additional personality notes configured.}
 
+### Formatting Notes
+- On Telegram, avoid markdown tables — use bullet lists instead.
+- Wrap links in <> to suppress previews on platforms that support it.
+
 $(if [ "$VERBOSE_MODE" = "verbose" ]; then
 cat << 'VERBEOF'
 ### Agent Transparency (Verbose Mode)

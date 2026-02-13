@@ -6,6 +6,28 @@
 
 wizard_header "5" "Brain Personality" "Customize your AI assistant's personality."
 
+# --- Use Defaults Option ---
+echo ""
+QUICK_CHOICE="$(gum choose \
+    "Use recommended defaults" \
+    "Customize manually")"
+
+if [ "$QUICK_CHOICE" = "Use recommended defaults" ]; then
+    state_set "brain.name" "Cortex"
+    state_set "brain.style" "balanced"
+    state_set "brain.verbosity" "adaptive"
+    state_set "brain.personality_notes" ""
+    state_set "brain.verbose_mode" "verbose"
+    wizard_divider
+    gum style --bold "Brain Configuration (defaults):"
+    echo "  Name:        Cortex 🧠"
+    echo "  Style:       balanced"
+    echo "  Verbosity:   adaptive"
+    echo "  Transparency: verbose"
+    wizard_success "Brain personality defaults applied!"
+    return 0 2>/dev/null || exit 0
+fi
+
 # --- Defaults ---
 DEF_BRAIN_NAME="$(state_get 'brain.name' 'Cortex')"
 DEF_STYLE="$(state_get 'brain.style' '')"

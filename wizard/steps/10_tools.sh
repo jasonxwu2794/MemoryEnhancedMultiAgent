@@ -6,6 +6,26 @@
 
 wizard_header "10" "Tools" "Select which tools your agents can use."
 
+# --- Use Defaults Option ---
+echo ""
+QUICK_CHOICE="$(gum choose \
+    "Use recommended defaults" \
+    "Customize manually")"
+
+if [ "$QUICK_CHOICE" = "Use recommended defaults" ]; then
+    state_set_json "tools" '["web_search","file_access","code_execution","web_fetch"]'
+    state_set "features.morning_brief" "true"
+    state_set "features.morning_brief_hour_local" "8"
+    state_set "features.idea_surfacing" "true"
+    wizard_divider
+    gum style --bold "Tools (defaults):"
+    echo "  ✅ Web Search, File Access, Code Execution, Web Fetch"
+    echo "  ✅ Morning Brief enabled (8:00 local)"
+    echo "  ✅ Idea Surfacing enabled (weekly)"
+    wizard_success "Tool defaults applied!"
+    return 0 2>/dev/null || exit 0
+fi
+
 # --- Tool options ---
 TOOL_OPTS=(
     "🔍 Web Search — Search the web via Brave API"
@@ -37,7 +57,17 @@ for opt in "${TOOL_OPTS[@]}"; do
     done
 done
 
-CHOICES="$(gum choose --no-limit "${SELECTED_ARGS[@]}" "${TOOL_OPTS[@]}")" || CHOICES=""
+while true; do
+    CHOICES="$(gum choose --no-limit "${SELECTED_ARGS[@]}" "${TOOL_OPTS[@]}")" || CHOICES=""
+
+    if [ -z "$CHOICES" ]; then
+        if gum confirm "Skip tools? You can add them later."; then
+            break
+        fi
+        continue
+    fi
+    break
+done
 
 # Parse selections into tool slugs
 TOOLS_JSON="["

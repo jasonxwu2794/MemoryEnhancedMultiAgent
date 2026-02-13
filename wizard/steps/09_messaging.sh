@@ -36,6 +36,8 @@ case "$PLATFORM" in
             "" \
             "🔗 https://t.me/BotFather"
         echo ""
+        gum style --foreground 240 "  Format: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+        echo ""
 
         while true; do
             TOKEN="$(wizard_password "  Bot token:")"

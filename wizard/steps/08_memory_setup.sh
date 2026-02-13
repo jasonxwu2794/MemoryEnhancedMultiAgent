@@ -6,6 +6,19 @@
 
 wizard_header "8" "Memory Setup" "How much context should your agents remember?"
 
+# --- Use Defaults Option ---
+echo ""
+QUICK_CHOICE="$(gum choose \
+    "Use recommended defaults" \
+    "Customize manually")"
+
+if [ "$QUICK_CHOICE" = "Use recommended defaults" ]; then
+    state_set "memory_tier" "full"
+    log_ok "Memory tier: full (recommended)"
+    wizard_success "Memory configuration saved!"
+    return 0 2>/dev/null || exit 0
+fi
+
 PREV_TIER="$(state_get 'memory_tier' '')"
 if [ -z "$PREV_TIER" ] && is_recommended; then
     PREV_TIER="full"
