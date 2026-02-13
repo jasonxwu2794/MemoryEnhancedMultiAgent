@@ -16,14 +16,14 @@ QUICK_CHOICE="$(gum choose \
 case "$QUICK_CHOICE" in
     "Use recommended"*)
         state_set "tech_stack.language" "python"
-        state_set "tech_stack.frameworks" "FastAPI"
+        state_set "tech_stack.frameworks" "FastAPI,React"
         state_set "tech_stack.package_manager" "pip"
         state_set "tech_stack.database" "SQLite"
         state_set "tech_stack.other" ""
         wizard_divider
         gum style --bold "Tech Stack Configuration (defaults):"
         echo "  Language:        python"
-        echo "  Frameworks:      FastAPI"
+        echo "  Frameworks:      FastAPI, React"
         echo "  Package Manager: pip"
         echo "  Database:        SQLite"
         wizard_success "Tech stack defaults applied!"
