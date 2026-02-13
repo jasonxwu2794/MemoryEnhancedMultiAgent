@@ -30,13 +30,13 @@
 ### Agent System
 - [x] SQLite schema — memory tables, knowledge cache, message bus, projects
 - [x] Agent protocol — SQLite message bus, `AgentMessage`, `BaseAgent`
-- [x] LLM client — multi-provider (Anthropic full; DeepSeek/Qwen/MiniMax/Kimi/Mistral stubs)
+- [x] LLM client — multi-provider (Anthropic, DeepSeek, Qwen, Google Gemini full; Kimi/MiniMax OpenAI-compat)
 - [x] Sub-agent pools for parallel LLM calls
 - [x] All 5 agents wired: Cortex 🧠, Builder 🔨, Researcher 🔬, Verifier ✅, Guardian 🛡️
 - [x] Cortex (Brain) as main OpenClaw session
 - [x] Session manager — `delegate()`, `delegate_parallel()` via OpenClaw sessions
 - [x] Context scoping — each agent only sees what Cortex passes
-- [x] Aider mandatory for Builder (git-aware code editing)
+- [x] Aider for Builder (git-aware code editing; supports DeepSeek V3.2, Gemini 2.5/3 Pro, Claude)
 
 ### Reliability
 - [x] Error handling — retries with backoff, graceful degradation, context guard at 85%, DB recovery
@@ -91,6 +91,13 @@
 - [ ] Multi-repo project management
 - [ ] GitHub Actions integration
 - [ ] Remote GitOps (push to VPS from GitHub)
+- [ ] Custom code editing engine (model-agnostic, replaces Aider dependency)
+  - Search/replace block parser (~50 lines, works with ANY LLM)
+  - Tree-sitter repo mapping for intelligent context
+  - Unlocks models not supported by Aider (Kimi K2.5, future models)
+  - Zero external dependency for code editing
+- [ ] Full model flexibility — any OpenAI-compatible or native API model for any agent
+- [ ] Smart model routing v2 (auto-select based on task complexity + Arena/Aider benchmarks)
 
 ---
 
@@ -134,3 +141,5 @@
 - [ ] Cost-aware routing
 - [ ] Quality monitoring — detect degraded responses and escalate
 - [ ] Provider health tracking
+- [ ] Day-one support for new models (no waiting for Aider compatibility)
+- [ ] Benchmark-aware model suggestions (auto-recommend based on latest Aider/Arena data)

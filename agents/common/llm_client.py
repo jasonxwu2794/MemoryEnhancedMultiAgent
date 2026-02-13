@@ -21,25 +21,28 @@ logger = logging.getLogger(__name__)
 
 # Model name → provider mapping for auto-detection
 MODEL_TO_PROVIDER: dict[str, str] = {
-    "claude-sonnet-4": "anthropic",
-    "claude-sonnet-4-20250514": "anthropic",
-    "claude-opus-4": "anthropic",
-    "claude-opus-4-0514": "anthropic",
-    "deepseek-v3": "deepseek",
+    # Anthropic (latest: Claude Opus 4.6, Sonnet 4.5)
+    "claude-opus-4-6": "anthropic",
+    "claude-opus-4-6-20260110": "anthropic",
+    "claude-sonnet-4-5": "anthropic",
+    "claude-sonnet-4-5-20250929": "anthropic",
+    # DeepSeek (latest: V3.2 — Chat and Reasoner modes)
     "deepseek-chat": "deepseek",
-    "deepseek-coder": "deepseek",
+    "deepseek-reasoner": "deepseek",
+    # Alibaba Qwen (latest: Qwen3 series)
     "qwen-max": "qwen",
     "qwen-plus": "qwen",
+    "qwen-coder": "qwen",
     "qwen-turbo": "qwen",
-    "abab6.5s-chat": "minimax",
-    "abab5.5-chat": "minimax",
-    "moonshot-v1-8k": "kimi",
-    "moonshot-v1-32k": "kimi",
-    "moonshot-v1-128k": "kimi",
-    "codestral-latest": "mistral",
-    "codestral": "mistral",
-    "mistral-large-latest": "mistral",
-    "mistral-small-latest": "mistral",
+    # Google Gemini
+    "gemini-3-pro": "google",
+    "gemini-3-pro-preview": "google",
+    "gemini-2.5-pro": "google",
+    "gemini-2.5-flash": "google",
+    # Moonshot / Kimi (latest: K2.5)
+    "kimi-k2.5": "kimi",
+    "kimi-k2.5-thinking": "kimi",
+    "kimi-k2.5-instant": "kimi",
 }
 
 # Module-level singleton usage tracker
@@ -55,12 +58,11 @@ def get_usage_tracker() -> UsageTracker:
 
 # Provider → (env var for API key, base URL, default model)
 PROVIDERS: dict[str, tuple[str, str, str]] = {
-    "anthropic": ("ANTHROPIC_API_KEY", "https://api.anthropic.com/v1", "claude-sonnet-4-20250514"),
+    "anthropic": ("ANTHROPIC_API_KEY", "https://api.anthropic.com/v1", "claude-opus-4-6"),
     "deepseek": ("DEEPSEEK_API_KEY", "https://api.deepseek.com/v1", "deepseek-chat"),
-    "qwen": ("QWEN_API_KEY", "https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-plus"),
-    "minimax": ("MINIMAX_API_KEY", "https://api.minimax.chat/v1", "abab6.5s-chat"),
-    "kimi": ("KIMI_API_KEY", "https://api.moonshot.cn/v1", "moonshot-v1-8k"),
-    "mistral": ("MISTRAL_API_KEY", "https://api.mistral.ai/v1", "mistral-large-latest"),
+    "qwen": ("QWEN_API_KEY", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1", "qwen-plus"),
+    "google": ("GOOGLE_API_KEY", "https://generativelanguage.googleapis.com/v1beta", "gemini-2.5-pro"),
+    "kimi": ("KIMI_API_KEY", "https://api.moonshot.cn/v1", "kimi-k2.5"),
 }
 
 # Standardized error result factory
@@ -90,12 +92,10 @@ def _detect_provider(model: str) -> str:
         return "deepseek"
     if "qwen" in model_lower:
         return "qwen"
-    if "minimax" in model_lower or "abab" in model_lower:
-        return "minimax"
+    if "gemini" in model_lower:
+        return "google"
     if "moonshot" in model_lower or "kimi" in model_lower:
         return "kimi"
-    if "mistral" in model_lower or "mixtral" in model_lower or "codestral" in model_lower:
-        return "mistral"
     return "anthropic"  # default
 
 
@@ -113,7 +113,7 @@ class LLMClient:
         code_timeout: float = 180.0,
         agent_name: str = "unknown",
     ):
-        self.default_model = default_model or os.getenv("LLM_DEFAULT_MODEL", "claude-sonnet-4-20250514")
+        self.default_model = default_model or os.getenv("LLM_DEFAULT_MODEL", "claude-opus-4-6")
         self.timeout = timeout
         self.code_timeout = code_timeout
         self.agent_name = agent_name
@@ -145,6 +145,12 @@ class LLMClient:
             if provider == "anthropic":
                 result = await self._call_with_resilience(
                     self._call_anthropic, provider,
+                    model, system, messages or [], temperature, max_tokens,
+                    is_code=is_code,
+                )
+            elif provider == "google":
+                result = await self._call_with_resilience(
+                    self._call_google, provider,
                     model, system, messages or [], temperature, max_tokens,
                     is_code=is_code,
                 )
@@ -341,7 +347,62 @@ class LLMClient:
             "raw": data,
         }
 
-    # ─── OpenAI-compatible (DeepSeek, Qwen, Kimi, Mistral, MiniMax) ──
+    # ─── Google Gemini API ──────────────────────────────────────────
+
+    async def _call_google(
+        self,
+        model: str,
+        system: str,
+        messages: list[dict],
+        temperature: float,
+        max_tokens: int,
+    ) -> dict[str, Any]:
+        api_key = os.environ.get("GOOGLE_API_KEY", "")
+        if not api_key:
+            return _error_result("GOOGLE_API_KEY not set", "google")
+
+        # Convert messages to Gemini format
+        contents = []
+        for msg in messages:
+            role = "user" if msg["role"] == "user" else "model"
+            contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+
+        body: dict[str, Any] = {
+            "contents": contents,
+            "generationConfig": {
+                "temperature": temperature,
+                "maxOutputTokens": max_tokens,
+            },
+        }
+        if system:
+            body["systemInstruction"] = {"parts": [{"text": system}]}
+
+        resp = await self._http.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}",
+            headers={"Content-Type": "application/json"},
+            json=body,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        content = ""
+        for candidate in data.get("candidates", []):
+            for part in candidate.get("content", {}).get("parts", []):
+                content += part.get("text", "")
+
+        usage_meta = data.get("usageMetadata", {})
+        return {
+            "content": content,
+            "model": model,
+            "provider": "google",
+            "usage": {
+                "input_tokens": usage_meta.get("promptTokenCount", 0),
+                "output_tokens": usage_meta.get("candidatesTokenCount", 0),
+            },
+            "raw": data,
+        }
+
+    # ─── OpenAI-compatible (DeepSeek, Qwen, Kimi, MiniMax) ───────────
 
     async def _call_openai_compat(
         self,

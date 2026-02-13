@@ -19,7 +19,7 @@ No containers. No Redis. No separate services. One process, one database file, m
 
 ### 🧠 Cortex (Chief of Staff)
 - **Role**: Intent classification, task decomposition, delegation, response synthesis, memory gatekeeper
-- **Model**: Best available (claude or similar)
+- **Model**: Best available (claude-opus-4-6 or similar)
 - **Runs as**: Main OpenClaw session — the entry point for all user interaction
 - **Permissions**: Delegates to all agents, reads/writes shared memory, owns conversation state
 - **Sub-agents**: NEVER — must maintain unified coherence
@@ -27,7 +27,7 @@ No containers. No Redis. No separate services. One process, one database file, m
 
 ### 🔨 Builder (Engineer)
 - **Role**: Code generation, file operations, tool execution, debugging
-- **Model**: Fast code model (deepseek-chat or codestral)
+- **Model**: Fast code model (deepseek-reasoner or deepseek-chat)
 - **Runs as**: Spawned session from Cortex
 - **Permissions**: Can execute code, NO internet, NO memory writes, flags factual claims
 - **Sub-agents**: YES for multi-component builds (architect → parallel build → integration → test)
@@ -35,7 +35,7 @@ No containers. No Redis. No separate services. One process, one database file, m
 
 ### ✅ Verifier (Editor/QA)
 - **Role**: Claim verification, source checking, consistency analysis, hallucination detection, knowledge cache updates
-- **Model**: Precise reasoning model (qwen-max or claude)
+- **Model**: Precise reasoning model (claude-opus-4-6 or gemini-2.5-pro)
 - **Runs as**: Spawned session from Cortex
 - **Permissions**: Can search web, can update knowledge cache, NO code execution
 - **Sub-agents**: YES for batch verification (parallel claim checking)
@@ -43,7 +43,7 @@ No containers. No Redis. No separate services. One process, one database file, m
 
 ### 🔬 Researcher (Analyst/Librarian)
 - **Role**: Proactive information gathering, multi-source synthesis, documentation reading, prior art discovery
-- **Model**: Good at synthesis (qwen-max or similar)
+- **Model**: Good at synthesis (qwen-plus or gemini-2.5-pro)
 - **Runs as**: Spawned session from Cortex
 - **Permissions**: Full web access, can read repos/docs, feeds knowledge cache
 - **Sub-agents**: ALWAYS — research is embarrassingly parallel (3-6 threads per query, then synthesis)
@@ -51,7 +51,7 @@ No containers. No Redis. No separate services. One process, one database file, m
 
 ### 🛡️ Guardian (Security Lead)
 - **Role**: Security review of Builder output, config validation, prompt injection detection, permissions monitoring, cost tracking
-- **Model**: Precise model (claude or qwen-max)
+- **Model**: Precise model (deepseek-chat or claude-sonnet-4-5)
 - **Runs as**: Spawned session from Cortex
 - **Permissions**: Read-only on all agent outputs, can BLOCK actions, monitors costs
 - **Sub-agents**: NEVER — must see full picture

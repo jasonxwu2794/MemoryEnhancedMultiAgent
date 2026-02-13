@@ -8,13 +8,15 @@ wizard_header "6" "Model Selection" "Choose which AI model powers each agent."
 
 # --- Model definitions ---
 MODELS=(
-    "Claude Sonnet 4|claude-sonnet-4|anthropic|~\$15-30/mo|████████░░"
-    "Claude Opus 4|claude-opus-4|anthropic|~\$40-80/mo|██████████"
-    "Kimi|kimi|moonshot|~\$5-15/mo|█████░░░░░"
-    "Qwen Max|qwen-max|alibaba|~\$8-20/mo|██████░░░░"
-    "MiniMax|minimax|minimax|~\$5-12/mo|█████░░░░░"
-    "DeepSeek|deepseek-v3|deepseek|~\$3-10/mo|████░░░░░░"
-    "Codestral|codestral|mistral|~\$5-15/mo|█████░░░░░"
+    "Claude Opus 4.6|claude-opus-4-6|anthropic|~\$40-80/mo|██████████|💰💰💰 Best brain money can buy"
+    "Claude Sonnet 4.5|claude-sonnet-4-5|anthropic|~\$15-30/mo|████████░░|Save ~40% vs Opus"
+    "DeepSeek V3.2 Reasoner|deepseek-reasoner|deepseek|~\$2-8/mo|██████░░░░|🏆 Best coding value (74% Aider)"
+    "DeepSeek V3.2 Chat|deepseek-chat|deepseek|~\$1-5/mo|████░░░░░░|Fast + cheap, no thinking"
+    "Gemini 3 Pro|gemini-3-pro-preview|google|~\$15-40/mo|█████████░|🔥 #3 Arena coding, premium"
+    "Gemini 2.5 Pro|gemini-2.5-pro|google|~\$10-30/mo|████████░░|83% Aider, 1M context"
+    "Qwen3 Max|qwen-max|alibaba|~\$5-15/mo|██████░░░░|Complex tasks, 262K context"
+    "Qwen3 Plus|qwen-plus|alibaba|~\$2-6/mo|████░░░░░░|1M context, never recharge 😂"
+    "Kimi K2.5|kimi-k2.5|moonshot|~\$3-10/mo|██████░░░░|#4 Arena coding, multimodal"
 )
 
 # --- Agents to configure ---
@@ -28,14 +30,14 @@ declare -A AGENT_LABELS=(
 
 # --- Recommended defaults ---
 declare -A DEFAULTS=(
-    [brain]="Claude Sonnet 4"
-    [builder]="DeepSeek"
-    [researcher]="Qwen Max"
-    [verifier]="Qwen Max"
-    [guardian]="Claude Sonnet 4"
+    [brain]="Claude Opus 4.6"
+    [builder]="DeepSeek V3.2 Reasoner"
+    [researcher]="Qwen3 Plus"
+    [verifier]="Claude Opus 4.6"
+    [guardian]="DeepSeek V3.2 Chat"
 )
 
-AGENT_ORDER=(brain builder researcherverifierguardian)
+AGENT_ORDER=(brain builder researcher verifier guardian)
 
 # Build display names for gum choose
 MODEL_NAMES=()
