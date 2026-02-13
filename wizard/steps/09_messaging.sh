@@ -53,6 +53,18 @@ case "$PLATFORM" in
                 log_ok "Connected! Bot: @$BOT_NAME"
                 state_set "telegram_token" "$TOKEN"
                 state_set "telegram_bot" "$BOT_NAME"
+
+                # Optional: collect owner's Telegram user ID for access control
+                echo ""
+                gum style --foreground 240 "  Your numeric Telegram user ID — find it by messaging @userinfobot on Telegram"
+                TELEGRAM_OWNER_ID="$(wizard_input "  Your Telegram user ID (Enter to skip):" "")"
+                if [ -n "$TELEGRAM_OWNER_ID" ]; then
+                    state_set "telegram_owner" "$TELEGRAM_OWNER_ID"
+                    log_ok "Owner ID saved: $TELEGRAM_OWNER_ID (only you can message the bot)"
+                else
+                    log_info "No owner ID — bot will accept messages from everyone"
+                fi
+
                 break
             else
                 log_error "Invalid token. Please check and try again."

@@ -79,7 +79,7 @@ log_info "Installing Aider (AI-powered code editor)..."
 wizard_spin "Installing aider-chat..." python3 -m pip install --break-system-packages --ignore-installed aider-chat 2>/dev/null || python3 -m pip install aider-chat
 
 if has_cmd aider; then
-    AIDER_VER="$(aider --version 2>/dev/null || echo 'installed')"
+    AIDER_VER="$(timeout 5 aider --version 2>/dev/null || echo 'installed')"
     log_ok "Aider installed: $AIDER_VER"
 else
     log_warn "Aider installation may have failed — Builder will fall back to direct editing"

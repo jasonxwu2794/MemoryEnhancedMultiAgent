@@ -22,7 +22,7 @@ BRAIN_NAME="$(state_get 'brain.name' 'Cortex')"
 BRAIN_STYLE="$(state_get 'brain.style' 'balanced')"
 BRAIN_VERBOSITY="$(state_get 'brain.verbosity' 'adaptive')"
 BRAIN_NOTES="$(state_get 'brain.personality_notes')"
-MEMORY_TIER="$(state_get 'memory_tier' 'standard')"
+MEMORY_TIER="$(state_get 'memory_tier' 'full')"
 MESSAGING="$(state_get 'messaging' 'cli')"
 
 VERBOSE_MODE="$(state_get 'brain.verbose_mode' 'verbose')"
@@ -50,11 +50,15 @@ mkdir -p "$OC_DIR/agents/main/agent"
 # ============================================================
 log_info "Installing Python dependencies for memory engine..."
 log_info "  Using ONNX runtime for embeddings (lightweight, no PyTorch needed)..."
-python3 -m pip install --break-system-packages --ignore-installed -r "$PROJECT_DIR/requirements.txt" 2>&1 | tail -5 || \
-    python3 -m pip install -r "$PROJECT_DIR/requirements.txt" 2>&1 | tail -5 || {
-    log_warn "pip install failed — memory features may not work"
+PIP_LOG="/tmp/pip-install-$$.log"
+if python3 -m pip install --break-system-packages --ignore-installed -r "$PROJECT_DIR/requirements.txt" > "$PIP_LOG" 2>&1; then
+    tail -3 "$PIP_LOG"
+else
+    cat "$PIP_LOG"
+    log_warn "pip install had errors — some features may not work"
     log_warn "  Try manually: pip install onnxruntime tokenizers numpy httpx --break-system-packages"
-}
+fi
+rm -f "$PIP_LOG"
 log_ok "Python dependencies installed"
 
 # ============================================================
@@ -63,9 +67,9 @@ log_ok "Python dependencies installed"
 gum spin --spinner dot --title "Copying agent system to workspace..." -- sleep 0.3
 
 # Copy agents/, memory/, TEAM.md
-cp -r "$PROJECT_DIR/agents" "$OC_WORKSPACE/"
-cp -r "$PROJECT_DIR/memory" "$OC_WORKSPACE/"
-cp -r "$PROJECT_DIR/scripts" "$OC_WORKSPACE/"
+cp -r "$PROJECT_DIR/agents" "$OC_WORKSPACE/" || log_warn "Failed to copy agents/ — agent system may be incomplete"
+cp -r "$PROJECT_DIR/memory" "$OC_WORKSPACE/" || log_warn "Failed to copy memory/ — memory engine may not work"
+cp -r "$PROJECT_DIR/scripts" "$OC_WORKSPACE/" || log_warn "Failed to copy scripts/ — maintenance scripts may be missing"
 
 log_ok "Agent system copied to workspace"
 
@@ -418,11 +422,14 @@ for provider in "${!NEEDED_PROVIDERS[@]}"; do
         --arg name "$profile_name" \
         --arg prov "$provider" \
         --arg key "$api_key" \
-        '.profiles[$name] = {"type":"api_key","provider":$prov,"key":$key} | .lastGood[$prov] = $name')"
+        '.profiles[$name] = {"type":"api_key","provider":$prov,"key":$key} | .lastGood[$prov] = $name')" || {
+        log_warn "Config generation issue — failed to add $provider auth profile"
+        continue
+    }
 done
 
 # Write auth-profiles.json (only if we have profiles)
-profile_count="$(echo "$AUTH_PROFILES" | jq '.profiles | length')"
+profile_count="$(echo "$AUTH_PROFILES" | jq '.profiles | length' 2>/dev/null || echo 0)"
 if [ "$profile_count" -gt 0 ]; then
     echo "$AUTH_PROFILES" | jq . > "$OC_AUTH"
     log_ok "Auth profiles configured ($profile_count provider(s))"
@@ -474,7 +481,9 @@ OC_JSON="$(echo "$OC_JSON" | jq \
      .agents.defaults.memorySearch.enabled = false |
      .agents.defaults.maxConcurrent = (.agents.defaults.maxConcurrent // 4) |
      .agents.defaults.subagents.maxConcurrent = (.agents.defaults.subagents.maxConcurrent // 8) |
-     .tools.deny = ["memory_search", "memory_get"]')"
+     .tools.deny = ["memory_search", "memory_get"]')" || {
+    log_warn "Config generation issue — openclaw.json may need manual review"
+}
 
 # Configure messaging channel
 case "$MESSAGING" in
@@ -482,16 +491,23 @@ case "$MESSAGING" in
         TELEGRAM_TOKEN="$(state_get 'telegram_token' '')"
         if [ -n "$TELEGRAM_TOKEN" ]; then
             TELEGRAM_OWNER="$(state_get 'telegram_owner' '')"
+            if [ -n "$TELEGRAM_OWNER" ]; then
+                ALLOW_FROM="[\"$TELEGRAM_OWNER\"]"
+            else
+                ALLOW_FROM='["*"]'
+            fi
             OC_JSON="$(echo "$OC_JSON" | jq \
                 --arg token "$TELEGRAM_TOKEN" \
-                --arg owner "$TELEGRAM_OWNER" \
+                --argjson allowFrom "$ALLOW_FROM" \
                 '.channels.telegram.enabled = true |
                  .channels.telegram.botToken = $token |
                  .channels.telegram.dmPolicy = "open" |
                  .channels.telegram.groupPolicy = "disabled" |
                  .channels.telegram.streamMode = "partial" |
-                 .channels.telegram.allowFrom = ["*"] |
-                 .plugins.entries.telegram.enabled = true')"
+                 .channels.telegram.allowFrom = $allowFrom |
+                 .plugins.entries.telegram.enabled = true')" || {
+                log_warn "Config generation issue — Telegram config may need manual review"
+            }
             log_ok "Telegram channel configured"
         fi
         ;;
@@ -574,6 +590,8 @@ cd "$PROJECT_DIR"
 
 # ============================================================
 # 5b. Set up memory consolidation cron job
+# NOTE: crontab runs in system timezone (usually UTC). Only the morning brief
+# converts local timezone to UTC for scheduling. All other jobs use UTC times.
 # ============================================================
 log_info "Setting up memory consolidation cron job..."
 
@@ -700,6 +718,17 @@ rm -f "$OC_WORKSPACE/MEMORY.md"
 ln -s /dev/null "$OC_WORKSPACE/MEMORY.md"
 
 log_ok "AGENTS.md generated (orchestration brain)"
+
+# Generate TOOLS.md — environment-specific notes
+cat > "$OC_WORKSPACE/TOOLS.md" << 'TOOLSEOF'
+# TOOLS.md - Local Notes
+
+Environment-specific notes for your setup.
+Add camera names, SSH hosts, API endpoints, device nicknames, etc.
+
+This file is yours — customize it as needed.
+TOOLSEOF
+log_ok "TOOLS.md generated (local notes template)"
 
 # ============================================================
 # 6b. Generate BOOTSTRAP.md — first-run greeting (self-deletes)
@@ -912,7 +941,7 @@ gum style \
     "🎉 Deployment Complete!" \
     "" \
     "  👤 User:     $USER_NAME ($USER_PREF)" \
-    "  🧠 Cortex:   $BRAIN_NAME ($MODEL_BRAIN)" \
+    "  🧠 Brain:    $BRAIN_NAME ($MODEL_BRAIN)" \
     "  🔨 Builder:  $MODEL_BUILDER" \
     "  🔬 Researcher:    $MODEL_RESEARCHER_THINKING / $MODEL_RESEARCHER_INSTANT" \
     "  ✅ Verifier:  $MODEL_VERIFIER" \
@@ -938,7 +967,7 @@ gum style \
     --margin "0 4" \
     "📋 What to try next:" \
     "" \
-    "  □ Say hello — test that Cortex responds" \
+    "  □ Say hello — test that $BRAIN_NAME responds" \
     "  □ Drop your first idea — /idea build a REST API" \
     "  □ Ask a question — Researcher kicks in automatically" \
     "  □ Check verbose mode — agent activity is visible by default" \
