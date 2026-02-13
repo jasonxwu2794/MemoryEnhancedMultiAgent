@@ -39,8 +39,8 @@ mkdir -p "$OC_DIR/agents/main/agent"
 # 1. Install Python dependencies
 # ============================================================
 log_info "Installing Python dependencies for memory engine..."
-gum spin --spinner dot --title "Installing sentence-transformers, numpy..." -- \
-    pip install -q sentence-transformers numpy 2>/dev/null || {
+gum spin --spinner dot --title "Installing Python dependencies..." -- \
+    pip install -q -r "$PROJECT_DIR/requirements.txt" 2>/dev/null || {
     log_warn "pip install failed — memory features may not work"
 }
 log_ok "Python dependencies installed"

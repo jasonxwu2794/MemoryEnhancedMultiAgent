@@ -1,2 +1,10 @@
-.wizard-state.json
 __pycache__/
+*.pyc
+*.db
+.wizard-state.json
+data/
+*.egg-info/
+dist/
+build/
+.env
+venv/

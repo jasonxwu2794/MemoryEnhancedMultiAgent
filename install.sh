@@ -42,6 +42,11 @@ fi
 
 ok "Repository ready at $INSTALL_DIR"
 
+# --- Step 1b: Install Python dependencies ---
+info "Installing Python dependencies..."
+pip install -r "$INSTALL_DIR/requirements.txt" -q 2>/dev/null || pip3 install -r "$INSTALL_DIR/requirements.txt" -q 2>/dev/null || warn "pip install failed — install dependencies manually"
+ok "Python dependencies installed"
+
 # --- Step 2: Install gum if missing ---
 install_gum() {
     local arch

@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "memory-enhanced-multi-agent"
+version = "0.1.0"
+description = "Memory-enhanced multi-agent system with scoring, knowledge graph, and intelligent retrieval"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "Jason Wu" },
+]
+
+dependencies = [
+    "sentence-transformers>=2.2.0",
+    "numpy>=1.24.0",
+    "httpx>=0.24.0",
+]
+
+[project.optional-dependencies]
+api-embeddings = [
+    "openai",
+    "voyageai",
+]
+
+[tool.setuptools.packages.find]
+include = ["agents*", "memory*"]
