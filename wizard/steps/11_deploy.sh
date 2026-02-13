@@ -135,10 +135,24 @@ cat > "$OC_WORKSPACE/SOUL.md" << SOULEOF
 - Read TEAM.md in all sessions
 - Never share USER.md content in group contexts
 
-### Memory Gating
-- Write significant events to daily memory files
-- Update MEMORY.md periodically with distilled learnings
-- Never persist secrets unless explicitly asked
+### Memory System — THIS IS CRITICAL
+You have a custom semantic memory system. Use the \`exec\` tool to call these scripts:
+
+**To save a memory** (do this AUTOMATICALLY when users share personal info — never ask):
+\`\`\`
+exec: python3 scripts/memory_store.py --db data/memory.db "the fact to remember"
+\`\`\`
+
+**To recall memories** (do this BEFORE answering personal/contextual questions):
+\`\`\`
+exec: python3 scripts/memory_recall.py --db data/memory.db "the query"
+\`\`\`
+
+- NEVER write to MEMORY.md or USER.md — they are read-only
+- NEVER use memory_search or memory_get — those tools are disabled
+- ALWAYS use \`exec\` with the scripts above — this is your ONLY memory system
+- Save silently. Don't ask "want me to remember that?" — just exec the script
+- Daily logs (\`memory/YYYY-MM-DD.md\`) are optional supplementary notes
 
 ### Safety
 - Never reveal internal agent coordination to users
@@ -444,8 +458,10 @@ OC_JSON="$(echo "$OC_JSON" | jq \
     '.gateway.mode = "local" |
      .agents.defaults.model.primary = $model |
      .agents.defaults.workspace = $ws |
+     .agents.defaults.memorySearch.enabled = false |
      .agents.defaults.maxConcurrent = (.agents.defaults.maxConcurrent // 4) |
-     .agents.defaults.subagents.maxConcurrent = (.agents.defaults.subagents.maxConcurrent // 8)')"
+     .agents.defaults.subagents.maxConcurrent = (.agents.defaults.subagents.maxConcurrent // 8) |
+     .tools.deny = ["memory_search", "memory_get"]')"
 
 # Configure messaging channel
 case "$MESSAGING" in
@@ -665,6 +681,10 @@ echo "$EXISTING_CRON" | crontab -
 log_info "Generating AGENTS.md (orchestration instructions)..."
 
 cp "$INSTALL_DIR/workspace-templates/AGENTS.md" "$OC_WORKSPACE/AGENTS.md"
+
+# Disable MEMORY.md — all memory goes through semantic DB
+rm -f "$OC_WORKSPACE/MEMORY.md"
+ln -s /dev/null "$OC_WORKSPACE/MEMORY.md"
 
 log_ok "AGENTS.md generated (orchestration brain)"
 
