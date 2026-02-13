@@ -13,15 +13,31 @@ QUICK_CHOICE="$(gum choose \
     "Customize manually")"
 
 if [ "$QUICK_CHOICE" = "Use recommended defaults" ]; then
-    state_set_json "tools" '["web_search","file_access","code_execution","web_fetch"]'
+    state_set_json "tools" '["web_search","file_access","code_execution","web_fetch","github"]'
     state_set "features.morning_brief" "true"
     state_set "features.morning_brief_hour_local" "8"
     state_set "features.idea_surfacing" "true"
     wizard_divider
     gum style --bold "Tools (defaults):"
-    echo "  ✅ Web Search, File Access, Code Execution, Web Fetch"
-    echo "  ✅ Morning Brief enabled (8:00 local)"
-    echo "  ✅ Idea Surfacing enabled (weekly)"
+    echo "  ✅  Web Search, File Access, Code Execution, Web Fetch"
+    echo "  ✅  Morning Brief enabled (8:00 local)"
+    echo "  ✅  Idea Surfacing enabled (weekly)"
+
+    # GitHub is essential for GitOps — always ask for token
+    echo ""
+    gum style --foreground 214 --bold "  🐙 GitHub Setup (recommended for GitOps)"
+    gum style --foreground 240 "  Your agents auto-commit work to a Git repo."
+    gum style --foreground 240 "  A GitHub token enables remote backup + collaboration."
+    gum style --foreground 240 "  Create one at: https://github.com/settings/tokens"
+    echo ""
+    GH_TOKEN="$(wizard_password "  GitHub token (Enter to skip):")"
+    if [ -n "$GH_TOKEN" ]; then
+        state_set "api_keys.github" "$GH_TOKEN"
+        log_ok "GitHub token saved"
+    else
+        log_info "GitHub skipped — workspace will be local git only"
+    fi
+
     wizard_success "Tool defaults applied!"
     return 0 2>/dev/null || exit 0
 fi
