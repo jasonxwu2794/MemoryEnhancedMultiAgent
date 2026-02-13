@@ -74,5 +74,18 @@ else
     gum style --foreground 212 --padding "0 2" "openclaw gateway start"
 fi
 
+# --- Install Aider (AI code editing tool) ---
+log_info "Installing Aider (AI-powered code editor)..."
+wizard_spin "Installing aider-chat..." pip install aider-chat
+
+if has_cmd aider; then
+    AIDER_VER="$(aider --version 2>/dev/null || echo 'installed')"
+    log_ok "Aider installed: $AIDER_VER"
+else
+    log_warn "Aider installation may have failed — Builder will fall back to direct editing"
+fi
+
+state_set "aider_installed" "true"
+
 wizard_success "OpenClaw installation complete!"
 state_set "openclaw_installed" "true"

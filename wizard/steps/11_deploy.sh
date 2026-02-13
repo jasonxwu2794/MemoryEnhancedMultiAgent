@@ -25,6 +25,13 @@ BRAIN_NOTES="$(state_get 'brain.personality_notes')"
 MEMORY_TIER="$(state_get 'memory_tier' 'standard')"
 MESSAGING="$(state_get 'messaging' 'cli')"
 
+VERBOSE_MODE="$(state_get 'brain.verbose_mode' 'stealth')"
+TECH_LANGUAGE="$(state_get 'tech_stack.language' '')"
+TECH_FRAMEWORKS="$(state_get 'tech_stack.frameworks' '')"
+TECH_PKG_MANAGER="$(state_get 'tech_stack.package_manager' '')"
+TECH_DATABASE="$(state_get 'tech_stack.database' '')"
+TECH_OTHER="$(state_get 'tech_stack.other' '')"
+
 MODEL_BRAIN="$(state_get 'models.brain' 'claude-sonnet-4')"
 MODEL_BUILDER="$(state_get 'models.builder' 'deepseek-v3')"
 MODEL_INVESTIGATOR="$(state_get 'models.investigator' 'qwen-max')"
@@ -88,6 +95,18 @@ ${USER_WORK:-Not specified}
 - **Name:** $USER_NAME ($USER_PREF)
 - **Field:** $USER_DOMAIN
 
+$(if [ -n "$TECH_LANGUAGE" ]; then
+cat << TECHEOF
+
+## Tech Stack
+- **Language:** $TECH_LANGUAGE
+$([ -n "$TECH_FRAMEWORKS" ] && echo "- **Frameworks:** $TECH_FRAMEWORKS")
+$([ -n "$TECH_PKG_MANAGER" ] && echo "- **Package Manager:** $TECH_PKG_MANAGER")
+$([ -n "$TECH_DATABASE" ] && echo "- **Database:** $TECH_DATABASE")
+$([ -n "$TECH_OTHER" ] && echo "- **Other:** $TECH_OTHER")
+TECHEOF
+fi)
+
 > This file is shared with ALL agents for domain awareness.
 EOF
 log_ok "TEAM.md generated"
@@ -138,6 +157,24 @@ cat > "$OC_WORKSPACE/SOUL.md" << SOULEOF
 
 ### Personality
 ${BRAIN_NOTES:-No additional personality notes configured.}
+
+$(if [ "$VERBOSE_MODE" = "verbose" ]; then
+cat << 'VERBEOF'
+### Agent Transparency (Verbose Mode)
+When delegating to specialist agents, show status messages to the user:
+- 🔨 Builder is working on that...
+- 🔍 Investigator is researching...
+- ✅ Verifier is checking the facts...
+- 🛡️ Guardian is reviewing security...
+After receiving results, briefly note which specialist contributed.
+VERBEOF
+else
+cat << 'STEALTHEOF'
+### Agent Transparency (Stealth Mode)
+Present all responses as a unified assistant. Never reveal agent coordination
+or mention specialist agents. The user should experience a single, seamless AI.
+STEALTHEOF
+fi)
 SOULEOF
 log_ok "Brain SOUL.md generated"
 
@@ -151,7 +188,7 @@ mkdir -p "$OC_WORKSPACE/agents/brain" "$OC_WORKSPACE/agents/builder" \
 # Copy Brain SOUL.md into agents dir too
 cp "$OC_WORKSPACE/SOUL.md" "$OC_WORKSPACE/agents/brain/SOUL.md"
 
-cat > "$OC_WORKSPACE/agents/builder/SOUL.md" << 'EOF'
+cat > "$OC_WORKSPACE/agents/builder/SOUL.md" << EOF
 # SOUL.md — Builder 🔨
 
 ## Role
@@ -168,6 +205,23 @@ You are Builder, the code generation and execution specialist.
 - Prioritize working code over perfect code
 - Include error handling and edge cases
 - Comment complex logic
+
+## Code Editing
+- Use Aider for all code editing tasks when working on existing codebases
+- Aider is pre-installed and available at \`aider\`
+- For new file creation, direct writing is fine
+- For modifying existing files, prefer Aider for its git-aware diff approach
+
+$(if [ -n "$TECH_LANGUAGE" ]; then
+cat << TECHEOF
+## Tech Stack (from user preferences)
+- Default to $TECH_LANGUAGE unless task specifies otherwise
+$([ -n "$TECH_FRAMEWORKS" ] && echo "- Use $TECH_FRAMEWORKS when applicable")
+$([ -n "$TECH_PKG_MANAGER" ] && echo "- Package management: $TECH_PKG_MANAGER")
+$([ -n "$TECH_DATABASE" ] && echo "- Database: $TECH_DATABASE")
+$([ -n "$TECH_OTHER" ] && echo "- Additional: $TECH_OTHER")
+TECHEOF
+fi)
 EOF
 
 cat > "$OC_WORKSPACE/agents/investigator/SOUL.md" << 'EOF'

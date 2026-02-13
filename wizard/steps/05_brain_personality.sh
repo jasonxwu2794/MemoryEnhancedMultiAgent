@@ -51,11 +51,24 @@ echo ""
 gum style --foreground 240 "  Any personality notes? (optional — e.g. 'be witty', 'use humor', 'talk like a pirate')"
 PERSONALITY_NOTES="$(wizard_input "✨ Personality:" "Press Enter to skip" "$DEF_NOTES")"
 
+# --- Agent Transparency ---
+echo ""
+gum style --foreground 212 "Agent transparency:"
+VERBOSE_OPTS=("Stealth — Brain handles everything silently, clean unified responses" "Verbose — Show when agents are working (🔍 Investigator is researching...)")
+
+DEF_VERBOSE="$(state_get 'brain.verbose_mode' 'stealth')"
+VERBOSE_CHOICE="$(gum choose "${VERBOSE_OPTS[@]}")"
+case "$VERBOSE_CHOICE" in
+    Verbose*) VERBOSE_MODE="verbose" ;;
+    *)        VERBOSE_MODE="stealth" ;;
+esac
+
 # --- Save state ---
 state_set "brain.name" "$BRAIN_NAME"
 state_set "brain.style" "$STYLE"
 state_set "brain.verbosity" "$VERBOSITY"
 state_set "brain.personality_notes" "$PERSONALITY_NOTES"
+state_set "brain.verbose_mode" "$VERBOSE_MODE"
 
 # --- Summary ---
 wizard_divider
@@ -64,5 +77,6 @@ echo "  Name:        $BRAIN_NAME 🧠"
 echo "  Style:       $STYLE"
 echo "  Verbosity:   $VERBOSITY"
 [ -n "$PERSONALITY_NOTES" ] && echo "  Personality: $PERSONALITY_NOTES"
+echo "  Transparency: $VERBOSE_MODE"
 
 wizard_success "Brain personality configured!"

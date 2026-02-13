@@ -53,6 +53,7 @@ STEPS=(
     "02_openclaw_install.sh"
     "03_config_mode.sh"
     "04_user_identity.sh"
+    "04b_tech_stack.sh"
     "05_brain_personality.sh"
     "06_model_selection.sh"
     "07_api_keys.sh"

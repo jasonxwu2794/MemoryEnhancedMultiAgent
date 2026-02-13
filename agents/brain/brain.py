@@ -212,12 +212,21 @@ class BrainAgent(BaseAgent):
     role = AgentRole.BRAIN
     name = "brain"
 
-    def __init__(self, memory_db_path: str = "data/memory.db", **kwargs):
+    # Verbose mode status messages
+    VERBOSE_STATUS = {
+        AgentRole.BUILDER: "🔨 Builder is working on that...",
+        AgentRole.INVESTIGATOR: "🔍 Investigator is researching...",
+        AgentRole.VERIFIER: "✅ Verifier is checking the facts...",
+        AgentRole.GUARDIAN: "🛡️ Guardian is reviewing security...",
+    }
+
+    def __init__(self, memory_db_path: str = "data/memory.db", verbose_mode: str = "stealth", **kwargs):
         memory = MemoryEngine(db_path=memory_db_path)
         super().__init__(memory=memory, **kwargs)
         self.conversation_history: list[dict] = []
         self._system_prompt_text: Optional[str] = None
         self.session_manager = AgentSessionManager()
+        self.verbose_mode = verbose_mode
 
     # ─── BaseAgent interface ──────────────────────────────────────────
 
@@ -501,6 +510,12 @@ class BrainAgent(BaseAgent):
 
     # ─── Single-Agent Delegation ──────────────────────────────────────
 
+    def _verbose_status(self, agent: AgentRole) -> Optional[str]:
+        """Return a status message if verbose mode is enabled."""
+        if self.verbose_mode == "verbose":
+            return self.VERBOSE_STATUS.get(agent)
+        return None
+
     async def _handle_single_agent(
         self,
         user_message: str,
@@ -516,6 +531,11 @@ class BrainAgent(BaseAgent):
         context = context_fn(user_message)
         agent_name = agent.value  # e.g. "builder", "investigator", "verifier"
         timeout = DELEGATION_TIMEOUTS.get(agent, 120.0)
+
+        # Verbose mode: log status before delegating
+        status_msg = self._verbose_status(agent)
+        if status_msg:
+            logger.info(f"Verbose status: {status_msg}")
 
         try:
             result = await self.session_manager.delegate(
@@ -749,8 +769,16 @@ class BrainAgent(BaseAgent):
                 ],
                 temperature=0.6,
             )
+            response_text = result["content"]
+
+            # Verbose mode: prepend status and note agent contribution
+            if self.verbose_mode == "verbose":
+                status = self.VERBOSE_STATUS.get(agent_role, "")
+                if status:
+                    response_text = f"{status}\n\n{response_text}"
+
             return {
-                "response": result["content"],
+                "response": response_text,
                 "intent": agent_role.value,
                 "delegated": True,
                 "agent_results": {agent_role.value: agent_result},

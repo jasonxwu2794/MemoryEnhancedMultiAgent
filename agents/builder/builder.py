@@ -37,6 +37,11 @@ WORKSPACE_DIR = Path(os.environ.get("WORKSPACE_DIR", "/workspace"))
 MULTI_COMPONENT_THRESHOLD = 2
 
 # Execution limits
+# Aider integration — prefer aider for modifying existing files
+AIDER_AVAILABLE = bool(subprocess.run(
+    ["which", "aider"], capture_output=True, text=True
+).returncode == 0)
+
 EXEC_TIMEOUT_SECONDS = 30
 EXEC_MAX_OUTPUT_BYTES = 100_000  # 100KB stdout/stderr cap
 
@@ -304,10 +309,13 @@ class BuilderAgent(BaseAgent):
         written_files = []
         errors = []
 
-        # Write artifacts
+        # Write artifacts (prefer Aider for modifications to existing files)
         for artifact in artifacts:
             try:
-                written = self._write_artifact(artifact)
+                if self._use_aider_for_modification(artifact):
+                    written = self._apply_with_aider(artifact)
+                else:
+                    written = self._write_artifact(artifact)
                 written_files.append(written)
             except Exception as e:
                 errors.append(f"Failed to write {artifact.get('path', '?')}: {e}")
@@ -553,6 +561,48 @@ class BuilderAgent(BaseAgent):
 
     # ─── File Operations ──────────────────────────────────────────────
 
+    def _use_aider_for_modification(self, artifact: dict) -> bool:
+        """
+        Decide whether to use Aider for a file modification.
+        Prefer Aider for modifying existing files in git repos.
+        """
+        if not AIDER_AVAILABLE:
+            return False
+        if artifact.get("action") != "modify":
+            return False
+        path_str = artifact.get("path", "")
+        full_path = (self._workspace / path_str).resolve()
+        return full_path.exists()
+
+    def _apply_with_aider(self, artifact: dict) -> dict:
+        """
+        Use Aider to apply a modification to an existing file.
+        Falls back to direct write on failure.
+        """
+        path_str = artifact.get("path", "")
+        content = artifact.get("content", "")
+        full_path = (self._workspace / path_str).resolve()
+
+        # Use aider in architect mode with the change description
+        cmd = (
+            f"cd {self._workspace} && aider --yes --no-auto-commits "
+            f"--message 'Update {path_str} with the following content' "
+            f"{full_path}"
+        )
+        try:
+            result = subprocess.run(
+                cmd, shell=True, capture_output=True, text=True,
+                timeout=60, cwd=str(self._workspace),
+            )
+            if result.returncode == 0:
+                logger.info(f"Aider modified: {path_str}")
+                return {"path": path_str, "action": "modify", "via": "aider"}
+        except Exception as e:
+            logger.warning(f"Aider failed for {path_str}: {e}, falling back to direct write")
+
+        # Fallback to direct write
+        return self._write_artifact(artifact)
+
     def _write_artifact(self, artifact: dict) -> dict:
         """
         Write a single artifact to the workspace.
@@ -714,6 +764,8 @@ class BuilderAgent(BaseAgent):
             parts.append("Recent errors:\n" + "\n".join(recent_errors[-3:]))
 
         tools = context.get("available_tools", [])
+        if AIDER_AVAILABLE and "aider" not in [str(t) for t in tools]:
+            tools.append("aider")
         if tools:
             parts.append("Available tools: " + ", ".join(str(t) for t in tools))
 

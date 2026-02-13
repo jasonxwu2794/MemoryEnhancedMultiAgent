@@ -27,7 +27,7 @@ curl ... | bash
          ├── Downloads repo
          ├── Installs gum (if missing)
          └── Launches wizard.sh
-              ├── Steps 1-10: Interactive TUI
+              ├── Steps 1-4, 4b, 5-10: Interactive TUI
               └── Step 11: Generate configs & deploy
 ```
 
@@ -71,7 +71,9 @@ curl ... | bash
 ### Actions
 
 1. `npm install -g openclaw`
-2. Create systemd service unit:
+2. `pip install aider-chat` — Aider is a **mandatory Builder tool** for git-aware code editing on existing codebases
+3. Verify both: `openclaw --version` and `aider --version`
+4. Create systemd service unit:
    ```
    [Unit]
    Description=OpenClaw Agent Gateway
@@ -168,6 +170,36 @@ Building a multi-agent system
 
 ---
 
+## Step 4b: Tech Stack Preferences
+
+**Purpose:** Capture the user's technology preferences so agents (especially Builder) default to the right language, frameworks, and tools.
+
+### Prompts
+
+| Field | Type | Options |
+|-------|------|---------|
+| Primary Language | Choose | Python, TypeScript/JS, Rust, Go, Java/Kotlin, Other |
+| Frameworks | Multi-select (language-dependent) | Python: FastAPI, Django, Flask, PyTorch, LangChain; TS: Next.js, React, Express, Nest.js, Svelte; Rust: Actix, Axum, Tokio; Go: Gin, Echo, Fiber; Java: Spring Boot, Quarkus |
+| Package Manager | Choose (language-dependent) | Python: pip, poetry, uv; TS: npm, pnpm, yarn, bun |
+| Database | Choose | PostgreSQL, SQLite, MongoDB, MySQL, No preference |
+| Other preferences | Free text (optional) | e.g. "prefer functional style", "always use Docker" |
+
+### State Keys
+
+All saved under `tech_stack.*`:
+- `tech_stack.language`
+- `tech_stack.frameworks`
+- `tech_stack.package_manager`
+- `tech_stack.database`
+- `tech_stack.other`
+
+### Generated Output
+
+- Added to `TEAM.md` as a `## Tech Stack` section (shared with all agents)
+- Added to Builder's `SOUL.md` as `## Tech Stack (from user preferences)` for default language/framework behavior
+
+---
+
 ## Step 5: Brain Agent Personality
 
 **Purpose:** Customize the user-facing agent's personality. Only Brain gets this — other agents maintain fixed professional personalities.
@@ -180,6 +212,14 @@ Building a multi-agent system
 | Communication style | Choose | Casual / Professional / Balanced (default) |
 | Verbosity | Choose | Concise / Detailed / Adaptive (default) |
 | Personality notes | Free text (optional) | e.g. "be witty", "use humor", "talk like a pirate" |
+| Agent transparency | Choose | Stealth (default) / Verbose |
+
+### Verbose Mode
+
+- **Stealth** (default): Brain presents unified responses without revealing agent coordination
+- **Verbose**: Brain shows status messages when delegating (e.g. "🔨 Builder is working on that...") and notes which agent contributed to the response
+
+Saved as `brain.verbose_mode` (`stealth` or `verbose`).
 
 ### SOUL.md Architecture — Two Layers
 
@@ -503,7 +543,15 @@ Running `./wizard.sh --reconfigure`:
     "name": "Brain",
     "style": "balanced",
     "verbosity": "adaptive",
-    "personality_notes": ""
+    "personality_notes": "",
+    "verbose_mode": "stealth"
+  },
+  "tech_stack": {
+    "language": "python",
+    "frameworks": "FastAPI,PyTorch",
+    "package_manager": "poetry",
+    "database": "PostgreSQL",
+    "other": "prefer functional style"
   },
   "models": {
     "brain": "claude-sonnet-4",
