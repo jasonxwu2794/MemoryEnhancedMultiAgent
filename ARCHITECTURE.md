@@ -302,6 +302,31 @@ CREATE TABLE memory_links (
 );
 ```
 
+## Security: Prompt Injection Defense
+
+The system includes layered defenses against prompt injection attacks — attempts by malicious content to hijack agent behaviour.
+
+### Pattern-Based Fast Scanning (Regex)
+A compiled set of regex patterns in `agents/common/content_tags.py` detects common injection techniques instantly, with zero LLM cost:
+- "Ignore previous instructions" and variants
+- Role-switching markers (`\n\nHuman:`, `\n\nAssistant:`, ChatML tags, `[INST]`)
+- System prompt escape attempts (`</system>`, `system:`)
+- Base64-encoded suspicious payloads
+
+Any agent can call `quick_scan(text)` to get a list of matched pattern names.
+
+### LLM-Based Deep Analysis
+When pattern scanning flags medium or high severity, the Guardian escalates to an LLM-based analysis that evaluates whether the content genuinely attempts to manipulate AI behaviour. The LLM verdict can only escalate severity, never downgrade it.
+
+### Content Tagging for Untrusted Sources
+All external/untrusted content is wrapped in `<untrusted_content source="...">` tags via `tag_untrusted()`. Dangerous role-switching markers are stripped by `strip_role_markers()`. Agents can import these utilities from `agents/common/content_tags.py` without depending on Guardian.
+
+### System Prompt Hardening
+`BaseAgent.build_system_prompt()` automatically appends a safety suffix instructing the model to never follow instructions found inside `<untrusted_content>` tags. The constant `SAFETY_SUFFIX` is also available for agents that build prompts manually.
+
+### Guardian as the Security Gate
+The Guardian agent's `review()` method integrates prompt injection scanning into its standard review pipeline. Any `external_content` field in message context or payload is automatically scanned. The Guardian can `detect_prompt_injection(content)` (returning severity, patterns, and recommendation) and `sanitize_content(content, source)` to neutralize threats.
+
 ## Config System
 
 ### Three-Layer Precedence (highest → lowest)

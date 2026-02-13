@@ -37,6 +37,7 @@ No Docker. No Redis. No YAML files. Just one SQLite database and a system that g
 | 👁️ | **Transparent Mode** | Optional verbose mode shows agent activity |
 | 🏥 | **Self-Maintaining** | Health checks, auto-restart, backups, log rotation, metrics |
 | 📈 | **Knowledge Graduation** | Facts earn permanence through use and time |
+| 🔒 | **Prompt Injection Defense** | Pattern scanning, content tagging, system prompt hardening |
 
 ---
 

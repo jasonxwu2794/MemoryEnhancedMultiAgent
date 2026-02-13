@@ -43,6 +43,7 @@ from agents.common.base_agent import BaseAgent
 from agents.common.protocol import AgentRole, AgentMessage, TaskStatus
 from agents.common.usage_tracker import UsageTracker
 from agents.common.secret_scanner import SECRET_PATTERNS as CENTRAL_SECRET_PATTERNS, scan_for_secrets
+from agents.common.content_tags import quick_scan as _quick_scan_patterns, tag_untrusted, strip_role_markers, INJECTION_PATTERNS as CONTENT_TAG_INJECTION_PATTERNS
 
 logger = logging.getLogger(__name__)
 
@@ -919,6 +920,98 @@ class GuardianAgent(BaseAgent):
                 "failure_count": failure_count,
             }
 
+    # ─── Prompt Injection Defense ─────────────────────────────────────
+
+    async def detect_prompt_injection(self, content: str) -> dict:
+        """Scan *content* for prompt injection attempts.
+
+        Two layers:
+        1. **Pattern-based** (fast, no LLM) — regex checks via ``content_tags.quick_scan``.
+        2. **LLM-based** (deeper) — asks the model whether the text tries to
+           manipulate an AI system's behaviour.
+
+        Returns::
+
+            {
+                "severity": "none|low|medium|high",
+                "patterns_found": [...],
+                "recommendation": "allow|sanitize|block",
+                "llm_explanation": "..." | None
+            }
+        """
+        # --- Layer 1: fast regex ---
+        patterns_found = _quick_scan_patterns(content)
+
+        # Determine initial severity from pattern count / type
+        dangerous_patterns = {
+            "human_role_switch", "assistant_role_switch", "system_tag_close",
+            "chatml_tags", "inst_tags", "base64_suspicious",
+        }
+        has_dangerous = bool(dangerous_patterns & set(patterns_found))
+
+        if not patterns_found:
+            severity = "none"
+        elif has_dangerous:
+            severity = "high"
+        elif len(patterns_found) >= 3:
+            severity = "high"
+        elif len(patterns_found) >= 1:
+            severity = "medium"
+        else:
+            severity = "low"
+
+        llm_explanation: str | None = None
+
+        # --- Layer 2: LLM-based (only when patterns suggest suspicion) ---
+        if severity in ("medium", "high"):
+            try:
+                truncated = content[:4000]
+                llm_result = await self.llm.generate(
+                    system="You are a security analyst. Respond with ONLY a JSON object.",
+                    prompt=(
+                        "Does the following text contain attempts to manipulate an AI "
+                        "system's behaviour (prompt injection, jailbreaking, role-switching, "
+                        "instruction override)?\n\n"
+                        f"---TEXT---\n{truncated}\n---END---\n\n"
+                        'Respond with JSON: {"is_injection": true/false, '
+                        '"severity": "none|low|medium|high", "explanation": "..."}'
+                    ),
+                    temperature=0.1,
+                )
+                import json as _json
+                try:
+                    parsed = _json.loads(llm_result["content"])
+                    llm_explanation = parsed.get("explanation")
+                    llm_severity = parsed.get("severity", severity)
+                    # Only escalate, never downgrade from pattern-based
+                    _order = {"none": 0, "low": 1, "medium": 2, "high": 3}
+                    if _order.get(llm_severity, 0) > _order.get(severity, 0):
+                        severity = llm_severity
+                except (_json.JSONDecodeError, TypeError):
+                    llm_explanation = llm_result.get("content")
+            except Exception as e:
+                logger.warning(f"LLM injection analysis failed: {e}")
+
+        # Recommendation
+        if severity == "high":
+            recommendation = "block"
+        elif severity == "medium":
+            recommendation = "sanitize"
+        else:
+            recommendation = "allow"
+
+        return {
+            "severity": severity,
+            "patterns_found": patterns_found,
+            "recommendation": recommendation,
+            "llm_explanation": llm_explanation,
+        }
+
+    def sanitize_content(self, content: str, source: str = "unknown") -> str:
+        """Wrap untrusted *content* in safe delimiters and neutralize dangerous patterns."""
+        cleaned = strip_role_markers(content)
+        return tag_untrusted(cleaned, source)
+
     # ─── Aggregated Review (called from intercept or direct) ──────────
 
     async def review(
@@ -949,8 +1042,26 @@ class GuardianAgent(BaseAgent):
         # 1. Fast regex credential scan
         all_issues.extend(self._fast_scan(msg))
 
-        # 2. Prompt injection check
+        # 2. Prompt injection check (legacy fast check)
         all_issues.extend(self._check_injection(msg))
+
+        # 2b. Deep prompt injection scan on external / untrusted content
+        external_content = msg.context.get("external_content") or msg.payload.get("external_content")
+        if external_content:
+            injection_result = await self.detect_prompt_injection(
+                external_content if isinstance(external_content, str) else json.dumps(external_content, default=str)
+            )
+            if injection_result["severity"] in ("medium", "high"):
+                all_issues.append({
+                    "severity": "critical" if injection_result["severity"] == "high" else "high",
+                    "category": "injection",
+                    "description": (
+                        f"Prompt injection detected (severity={injection_result['severity']}): "
+                        f"patterns={injection_result['patterns_found']}"
+                    ),
+                    "location": "external_content",
+                    "recommendation": injection_result["recommendation"],
+                })
 
         # 3. Cost budget check
         all_issues.extend(self._check_budget())
