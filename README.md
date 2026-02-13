@@ -3,7 +3,7 @@
 > **Zero to AI agent team in one command. No config files. No PhD required.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0-green.svg)]()
+[![Version](https://img.shields.io/badge/version-0.2.0-green.svg)]()
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)]()
 
 ---
@@ -29,6 +29,14 @@ No Docker. No Redis. No YAML files. Just one SQLite database and a system that g
 | ⚙️ | **Re-runnable Wizard** | Change models, add integrations, tweak personality — anytime, no manual editing |
 | 🛡️ | **Guardian Agent** | Monitors security, validates configs, tracks costs |
 | 🔄 | **Memory That Grows** | Knowledge cache of verified facts, auto-tagging, feedback-driven importance |
+| 📋 | **Project Mode** | Idea backlog, spec writing, Feature→Task hierarchy |
+| 🔨 | **Collaboration Pipeline** | Researcher→Builder→Verifier→Guardian→Cortex review chain |
+| 🔧 | **GitOps** | Auto-commit, pre-commit security scanning, rollback |
+| 💻 | **Tech Stack Aware** | Wizard asks your language/frameworks, Builder knows your stack |
+| ✏️ | **Aider Integration** | Git-aware code editing for Builder |
+| 👁️ | **Transparent Mode** | Optional verbose mode shows agent activity |
+| 🏥 | **Self-Maintaining** | Health checks, auto-restart, backups, log rotation, metrics |
+| 📈 | **Knowledge Graduation** | Facts earn permanence through use and time |
 
 ---
 
@@ -62,8 +70,8 @@ That's it. You're talking to a 5-agent AI system with persistent memory.
 |-------|------|-------------|
 | 🧠 **Cortex** | Chief of Staff | Talks to you, classifies intent, delegates tasks, synthesizes responses |
 | 🔨 **Builder** | Engineer | Generates code, runs tools, debugs — sandboxed, no internet access |
-| 🔬 **Researcher** | Researcher | Searches the web, reads docs, synthesizes findings in parallel |
-| ✅ **Verifier** | Verifier | Verifies claims, catches hallucinations, updates the knowledge cache |
+| 🔬 **Researcher** | Research & Synthesis | Searches the web, reads docs, synthesizes findings in parallel |
+| ✅ **Verifier** | Quality Assurance | Verifies claims, catches hallucinations, updates the knowledge cache |
 | 🛡️ **Guardian** | Security Lead | Reviews Builder output, monitors costs, blocks unsafe actions |
 
 ### How They Work Together
@@ -86,6 +94,23 @@ Builder Researcher Verifier Guardian
 - Other agents are spawned on-demand as sub-sessions
 - All communication flows through a **SQLite message bus**
 - Each agent only sees the context it needs (token-efficient)
+
+---
+
+## 📋 How Projects Work
+
+Projects turn ideas into shipped code through a structured pipeline:
+
+1. **💡 Idea** — you drop an idea into the backlog (`/idea build a REST API`)
+2. **📝 Spec** — promote an idea → Researcher gathers context → Cortex writes a spec → you approve
+3. **🔀 Decompose** — spec breaks down into **Features**, each feature into **Tasks**
+4. **🔨 Build loop** — for each task:
+   - **Builder** writes the code (with Aider for git-aware edits)
+   - **Verifier** validates correctness
+   - **Guardian** runs security checks
+   - **Cortex** reviews for coherence
+   - **Auto-commit** on success
+5. **📊 Track** — progress is tracked at every level (idea → feature → task)
 
 ---
 
@@ -120,6 +145,21 @@ Every memory gets a composite score combining:
 
 ---
 
+## 🏥 Self-Maintaining
+
+The system keeps itself healthy without babysitting:
+
+| | What | Details |
+|---|------|---------|
+| 💓 | **Health Checks** | Every 30 minutes — monitors agents, memory, disk; auto-restarts on failure |
+| 💾 | **Memory Backups** | Daily snapshots with 7-day rotation |
+| 📊 | **Metrics Harvesting** | Weekly collection of usage stats, costs, memory growth |
+| 📈 | **Knowledge Graduation** | Facts earn permanence through repeated use and time — from short-term → long-term → permanent |
+| 🔄 | **Consolidation** | Short-term memories are periodically clustered into long-term summaries |
+| 📜 | **Log Rotation** | Automatic cleanup so logs don't eat your disk |
+
+---
+
 ## 🧙 Wizard Steps
 
 The wizard walks you through everything. No config files. Re-run anytime with `./wizard.sh --reconfigure`.
@@ -131,7 +171,7 @@ The wizard walks you through everything. No config files. Re-run anytime with `.
 5. **Cortex's personality** — communication style, verbosity, custom notes
 6. **Model selection** — pick an LLM for each agent with cost estimates
 7. **API keys** — guided entry with instant validation
-8. **Memory tier** — Full / Standard / Minimal + embedding choice
+8. **Memory tier** — Full / Standard + embedding choice (Local / API)
 9. **Messaging platform** — Telegram, Discord, Signal, or CLI
 10. **Tool selection** — web search, GitHub, file access, code execution
 11. **Deploy** — generates configs, starts agents, Cortex says hello
@@ -156,35 +196,52 @@ You'll need an API key for at least one provider: [Anthropic](https://console.an
 
 ```
 MemoryEnhancedMultiAgent/
-├── install.sh                  # Entry point — one curl, one command
+├── install.sh                    # Entry point — one curl, one command
+├── Makefile                      # Dev commands (test, lint, install)
+├── pyproject.toml                # Python project config
+├── requirements.txt              # Production dependencies
 ├── wizard/
-│   ├── tui.sh                  # Main wizard (gum TUI)
-│   ├── steps/                  # Individual wizard steps (01-11)
-│   ├── templates/              # Jinja2 config templates
-│   └── generate_configs.sh
+│   ├── wizard.sh                 # Main wizard entry point
+│   ├── utils.sh                  # Shared TUI helpers
+│   └── steps/                    # Wizard steps (01–11)
+│       ├── 01_prerequisites.sh
+│       ├── 04b_tech_stack.sh     # Language/framework selection
+│       ├── 08_memory_setup.sh    # Memory tier + embeddings
+│       └── ...
 ├── agents/
-│   ├── common/                 # Shared interface, protocol, LLM client
-│   ├── brain/                  # 🧠 Orchestrator
-│   ├── builder/                # 🔨 Code & tools
-│   ├── researcher/             # 🔬 Researcher
-│   ├── verifier/           # ✅ Verifier
-│   └── guardian/               # 🛡️ Security & costs
+│   ├── session_manager.py        # Agent lifecycle & session routing
+│   ├── common/                   # Shared: base_agent, llm_client, protocol, gitops, retry
+│   ├── brain/                    # 🧠 Cortex + project management
+│   │   ├── brain.py              # Orchestrator
+│   │   ├── project_manager.py    # Idea backlog, project tracking
+│   │   ├── spec_writer.py        # Spec generation from ideas
+│   │   └── task_decomposer.py    # Feature→Task breakdown
+│   ├── builder/                  # 🔨 Code generation (+ Aider integration)
+│   ├── researcher/               # 🔬 Web research & synthesis
+│   ├── verifier/                 # ✅ Claim verification & QA
+│   └── guardian/                 # 🛡️ Security & cost monitoring
 ├── memory/
-│   ├── engine.py               # Memory orchestration
-│   ├── sqlite_store.py         # Vector + structured storage
-│   ├── scored_memory.py        # Importance + recency scoring
-│   ├── knowledge_cache.py      # Verified facts (no decay)
-│   ├── embeddings.py           # Local or API embeddings
-│   ├── consolidation.py        # Background memory maintenance
-│   └── retrieval.py            # Layered search
-├── configs/
-│   ├── base/                   # Default configs
-│   ├── overlays/               # Use-case presets
-│   └── user/                   # Your overrides (gitignored)
-├── tools/                      # Tool registry + installers
-├── ARCHITECTURE.md             # Deep technical design
-├── ROADMAP.md                  # What's planned
-└── WIZARD_SPEC.md              # Wizard design specification
+│   ├── engine.py                 # Memory orchestration
+│   ├── schemas.py                # Data models
+│   ├── scoring.py                # Importance + recency scoring
+│   ├── retrieval.py              # Layered search
+│   ├── embeddings.py             # Local or API embeddings
+│   ├── knowledge_cache.py        # Verified facts (no decay)
+│   ├── dedup.py                  # Near-duplicate detection
+│   ├── chunker.py                # Text chunking for long content
+│   ├── consolidation.py          # Short-term → long-term summaries
+│   ├── graduation.py             # Facts earn permanence over time
+│   └── knowledge_refresh.py      # Periodic fact re-validation
+├── scripts/
+│   ├── health_check.sh           # Auto-restart on failure
+│   ├── backup_memory.sh          # Daily memory snapshots
+│   ├── rotate_logs.sh            # Log cleanup
+│   └── pre-commit                # Security scanning hook
+├── tests/                        # Unit, integration, and e2e tests
+└── docs/
+    ├── ARCHITECTURE.md           # Deep technical design
+    ├── ROADMAP.md                # What's planned
+    └── WIZARD_SPEC.md            # Wizard design specification
 ```
 
 ---
@@ -193,7 +250,9 @@ MemoryEnhancedMultiAgent/
 
 | Phase | Status | Description |
 |-------|--------|-------------|
-| **Quick Launch** | 🔨 In Progress | OpenClaw sessions, SQLite, wizard — running on a $5 VPS |
+| **Phase 1 — Quick Launch** | ✅ Done | OpenClaw sessions, SQLite, wizard — running on a $5 VPS |
+| **Phase 1.5 — Project Mode & GitOps** | ✅ Done | Idea backlog, spec writing, Feature→Task pipeline, auto-commit, pre-commit hooks |
+| **Pro Tier** | 📋 Planned | Advanced memory strategies, multi-project support |
 | **Hardened Build** | 📋 Planned | Docker containers with network isolation per agent |
 | **Plugin System** | 📋 Planned | Add custom agents without forking |
 | **Mission Control** | 📋 Planned | Web UI for monitoring agents, memory, and costs |
