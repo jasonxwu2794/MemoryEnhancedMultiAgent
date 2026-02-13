@@ -798,6 +798,90 @@ git add -A 2>/dev/null || true
 git commit -m "Initial setup: agent system, config, and memory" --no-verify 2>/dev/null || true
 log_ok "Initial commit created"
 
+# ============================================================
+# 6c. Connect GitHub remote (if token provided)
+# ============================================================
+GH_TOKEN="$(state_get 'api_keys.github' '')"
+
+if [ -n "$GH_TOKEN" ]; then
+    wizard_divider
+    log_info "GitHub token detected — setting up remote repository..."
+    echo ""
+
+    GH_CHOICE="$(gum choose \
+        "Create a new private repo on GitHub" \
+        "Connect an existing repo" \
+        "Skip — keep local only" \
+        --header "  🐙 GitHub Repository")"
+
+    case "$GH_CHOICE" in
+        "Create a new private repo on GitHub")
+            # Get GitHub username
+            GH_USER="$(curl -sf -H "Authorization: token $GH_TOKEN" \
+                https://api.github.com/user | jq -r '.login' 2>/dev/null)"
+            
+            if [ -z "$GH_USER" ] || [ "$GH_USER" = "null" ]; then
+                log_warn "Could not authenticate with GitHub — check your token"
+            else
+                DEFAULT_REPO="$(echo "${USER_PREF:-agent}-workspace" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')"
+                REPO_NAME="$(gum input \
+                    --placeholder "$DEFAULT_REPO" \
+                    --header "  Repository name:" \
+                    --width 50)"
+                REPO_NAME="${REPO_NAME:-$DEFAULT_REPO}"
+
+                # Create private repo
+                CREATE_RESP="$(curl -sf -X POST \
+                    -H "Authorization: token $GH_TOKEN" \
+                    -H "Content-Type: application/json" \
+                    -d "{\"name\":\"$REPO_NAME\",\"private\":true,\"description\":\"$BRAIN_NAME workspace — memory-enhanced multi-agent system\"}" \
+                    https://api.github.com/user/repos 2>/dev/null)"
+
+                REPO_URL="$(echo "$CREATE_RESP" | jq -r '.clone_url // empty' 2>/dev/null)"
+
+                if [ -n "$REPO_URL" ]; then
+                    # Inject token into URL for push
+                    PUSH_URL="$(echo "$REPO_URL" | sed "s|https://|https://$GH_TOKEN@|")"
+                    git remote add origin "$PUSH_URL" 2>/dev/null || git remote set-url origin "$PUSH_URL"
+                    git branch -M main 2>/dev/null || true
+                    gum spin --spinner dot --title "Pushing to GitHub..." -- \
+                        git push -u origin main 2>/dev/null
+                    log_ok "GitHub repo created: https://github.com/$GH_USER/$REPO_NAME (private)"
+                    state_set "github.repo" "$REPO_URL"
+                    state_set "github.user" "$GH_USER"
+                else
+                    ERR_MSG="$(echo "$CREATE_RESP" | jq -r '.message // "Unknown error"' 2>/dev/null)"
+                    log_warn "Failed to create repo: $ERR_MSG"
+                fi
+            fi
+            ;;
+        "Connect an existing repo")
+            REPO_URL="$(gum input \
+                --placeholder "https://github.com/user/repo.git" \
+                --header "  Repository URL:" \
+                --width 60)"
+            
+            if [ -n "$REPO_URL" ]; then
+                # Inject token for auth
+                PUSH_URL="$(echo "$REPO_URL" | sed "s|https://|https://$GH_TOKEN@|")"
+                git remote add origin "$PUSH_URL" 2>/dev/null || git remote set-url origin "$PUSH_URL"
+                git branch -M main 2>/dev/null || true
+                gum spin --spinner dot --title "Pushing to GitHub..." -- \
+                    git push -u origin main --force 2>/dev/null && \
+                    log_ok "Connected to $REPO_URL" || \
+                    log_warn "Push failed — check repo URL and token permissions"
+                state_set "github.repo" "$REPO_URL"
+            fi
+            ;;
+        *)
+            log_info "Skipped GitHub — workspace is local git only"
+            ;;
+    esac
+else
+    log_info "No GitHub token — workspace is local git only"
+    log_info "  Add one later: set api_keys.github in wizard state and re-deploy"
+fi
+
 cd "$PROJECT_DIR"
 
 # ============================================================
