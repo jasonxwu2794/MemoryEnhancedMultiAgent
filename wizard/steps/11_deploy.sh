@@ -758,10 +758,17 @@ log_ok "Initial commit created"
 
 # ============================================================
 # 6c. Connect GitHub remote (if token provided)
+# Wrapped in error handling — GitHub failures should not kill the wizard
 # ============================================================
-GH_TOKEN="$(state_get 'api_keys.github' '')"
+_setup_github_remote() {
+    local GH_TOKEN="$(state_get 'api_keys.github' '')"
 
-if [ -n "$GH_TOKEN" ]; then
+    if [ -z "$GH_TOKEN" ]; then
+        log_info "No GitHub token — workspace is local git only"
+        log_info "  Add one later: set api_keys.github in wizard state and re-deploy"
+        return 0
+    fi
+
     wizard_divider
     log_info "GitHub token detected — setting up remote repository..."
     echo ""
@@ -780,37 +787,38 @@ if [ -n "$GH_TOKEN" ]; then
             
             if [ -z "$GH_USER" ] || [ "$GH_USER" = "null" ]; then
                 log_warn "Could not authenticate with GitHub — check your token"
+                return 0
+            fi
+
+            DEFAULT_REPO="$(echo "${USER_PREF:-agent}-workspace" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')"
+            REPO_NAME="$(gum input \
+                --placeholder "$DEFAULT_REPO" \
+                --header "  Repository name:" \
+                --width 50)"
+            REPO_NAME="${REPO_NAME:-$DEFAULT_REPO}"
+
+            # Create private repo
+            CREATE_RESP="$(curl -sf -X POST \
+                -H "Authorization: token $GH_TOKEN" \
+                -H "Content-Type: application/json" \
+                -d "{\"name\":\"$REPO_NAME\",\"private\":true,\"description\":\"$BRAIN_NAME workspace — memory-enhanced multi-agent system\"}" \
+                https://api.github.com/user/repos 2>/dev/null)"
+
+            REPO_URL="$(echo "$CREATE_RESP" | jq -r '.clone_url // empty' 2>/dev/null)"
+
+            if [ -n "$REPO_URL" ]; then
+                # Inject token into URL for push
+                PUSH_URL="$(echo "$REPO_URL" | sed "s|https://|https://$GH_TOKEN@|")"
+                git remote add origin "$PUSH_URL" 2>/dev/null || git remote set-url origin "$PUSH_URL"
+                git branch -M main 2>/dev/null || true
+                gum spin --spinner dot --title "Pushing to GitHub..." -- \
+                    git push -u origin main 2>/dev/null
+                log_ok "GitHub repo created: https://github.com/$GH_USER/$REPO_NAME (private)"
+                state_set "github.repo" "$REPO_URL"
+                state_set "github.user" "$GH_USER"
             else
-                DEFAULT_REPO="$(echo "${USER_PREF:-agent}-workspace" | tr '[:upper:]' '[:lower:]' | tr ' ' '-')"
-                REPO_NAME="$(gum input \
-                    --placeholder "$DEFAULT_REPO" \
-                    --header "  Repository name:" \
-                    --width 50)"
-                REPO_NAME="${REPO_NAME:-$DEFAULT_REPO}"
-
-                # Create private repo
-                CREATE_RESP="$(curl -sf -X POST \
-                    -H "Authorization: token $GH_TOKEN" \
-                    -H "Content-Type: application/json" \
-                    -d "{\"name\":\"$REPO_NAME\",\"private\":true,\"description\":\"$BRAIN_NAME workspace — memory-enhanced multi-agent system\"}" \
-                    https://api.github.com/user/repos 2>/dev/null)"
-
-                REPO_URL="$(echo "$CREATE_RESP" | jq -r '.clone_url // empty' 2>/dev/null)"
-
-                if [ -n "$REPO_URL" ]; then
-                    # Inject token into URL for push
-                    PUSH_URL="$(echo "$REPO_URL" | sed "s|https://|https://$GH_TOKEN@|")"
-                    git remote add origin "$PUSH_URL" 2>/dev/null || git remote set-url origin "$PUSH_URL"
-                    git branch -M main 2>/dev/null || true
-                    gum spin --spinner dot --title "Pushing to GitHub..." -- \
-                        git push -u origin main 2>/dev/null
-                    log_ok "GitHub repo created: https://github.com/$GH_USER/$REPO_NAME (private)"
-                    state_set "github.repo" "$REPO_URL"
-                    state_set "github.user" "$GH_USER"
-                else
-                    ERR_MSG="$(echo "$CREATE_RESP" | jq -r '.message // "Unknown error"' 2>/dev/null)"
-                    log_warn "Failed to create repo: $ERR_MSG"
-                fi
+                ERR_MSG="$(echo "$CREATE_RESP" | jq -r '.message // "Unknown error"' 2>/dev/null)"
+                log_warn "Failed to create repo: $ERR_MSG"
             fi
             ;;
         "Connect an existing repo")
@@ -835,9 +843,12 @@ if [ -n "$GH_TOKEN" ]; then
             log_info "Skipped GitHub — workspace is local git only"
             ;;
     esac
-else
-    log_info "No GitHub token — workspace is local git only"
-    log_info "  Add one later: set api_keys.github in wizard state and re-deploy"
+}
+
+# Run GitHub setup in a way that never kills the wizard
+if ! _setup_github_remote; then
+    log_warn "GitHub remote setup failed — continuing without GitHub"
+    log_warn "  You can set this up manually later with: git remote add origin <url>"
 fi
 
 cd "$PROJECT_DIR"
