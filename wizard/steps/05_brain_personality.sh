@@ -7,7 +7,7 @@
 wizard_header "5" "Brain Personality" "Customize your AI assistant's personality."
 
 # --- Defaults ---
-DEF_BRAIN_NAME="$(state_get 'brain.name' 'Brain')"
+DEF_BRAIN_NAME="$(state_get 'brain.name' 'Cortex')"
 DEF_STYLE="$(state_get 'brain.style' '')"
 DEF_VERBOSITY="$(state_get 'brain.verbosity' '')"
 DEF_NOTES="$(state_get 'brain.personality_notes' '')"
@@ -18,8 +18,8 @@ if is_recommended; then
 fi
 
 # --- Agent Name ---
-BRAIN_NAME="$(wizard_input "🧠 Agent name:" "e.g. Brain, Atlas, Jarvis" "$DEF_BRAIN_NAME")"
-BRAIN_NAME="${BRAIN_NAME:-Brain}"
+BRAIN_NAME="$(wizard_input "🧠 Agent name:" "e.g. Cortex, Atlas, Jarvis" "$DEF_BRAIN_NAME")"
+BRAIN_NAME="${BRAIN_NAME:-Cortex}"
 
 # --- Communication Style ---
 echo ""

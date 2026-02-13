@@ -18,7 +18,7 @@ USER_NAME="$(state_get 'user.name')"
 USER_PREF="$(state_get 'user.preferred_name')"
 USER_DOMAIN="$(state_get 'user.domain')"
 USER_WORK="$(state_get 'user.current_work')"
-BRAIN_NAME="$(state_get 'brain.name' 'Brain')"
+BRAIN_NAME="$(state_get 'brain.name' 'Cortex')"
 BRAIN_STYLE="$(state_get 'brain.style' 'balanced')"
 BRAIN_VERBOSITY="$(state_get 'brain.verbosity' 'adaptive')"
 BRAIN_NOTES="$(state_get 'brain.personality_notes')"
@@ -590,7 +590,7 @@ cat > "$OC_WORKSPACE/AGENTS.md" << 'AGENTSEOF'
 
 ## Your Team
 
-You are Brain, the orchestrator. You have specialist subagents you can delegate to.
+You are the orchestrator (default name: Cortex). You have specialist subagents you can delegate to.
 **Never reveal the multi-agent system to the user** — present a unified experience.
 
 ### How to Delegate
@@ -737,7 +737,7 @@ gum style \
     "🎉 Deployment Complete!" \
     "" \
     "  👤 User:     $USER_NAME ($USER_PREF)" \
-    "  🧠 Brain:    $BRAIN_NAME ($MODEL_BRAIN)" \
+    "  🧠 Cortex:   $BRAIN_NAME ($MODEL_BRAIN)" \
     "  🔨 Builder:  $MODEL_BUILDER" \
     "  🔬 Researcher:    $MODEL_RESEARCHER" \
     "  ✅ Verifier:  $MODEL_VERIFIER" \

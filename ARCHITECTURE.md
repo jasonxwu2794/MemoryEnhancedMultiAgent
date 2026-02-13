@@ -11,13 +11,13 @@ A multi-agent AI system that runs on OpenClaw, designed for someone interested i
 
 ## Quick Launch Architecture (v1)
 
-Brain runs as the **main OpenClaw agent session**. When it needs other agents, it **spawns them as OpenClaw sub-sessions** (concurrent LLM calls within the parent session). All persistent state lives in **SQLite** — message history, memory, knowledge cache.
+Cortex (the brain agent) runs as the **main OpenClaw agent session**. When it needs other agents, it **spawns them as OpenClaw sub-sessions** (concurrent LLM calls within the parent session). All persistent state lives in **SQLite** — message history, memory, knowledge cache.
 
 No containers. No Redis. No separate services. One process, one database file, multiple agent personalities.
 
 ## The 5 Agents
 
-### 🧠 Brain (Chief of Staff)
+### 🧠 Cortex (Chief of Staff)
 - **Role**: Intent classification, task decomposition, delegation, response synthesis, memory gatekeeper
 - **Model**: Best available (claude or similar)
 - **Runs as**: Main OpenClaw session — the entry point for all user interaction

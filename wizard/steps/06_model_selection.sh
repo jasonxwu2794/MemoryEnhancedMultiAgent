@@ -19,7 +19,7 @@ MODELS=(
 
 # --- Agents to configure ---
 declare -A AGENT_LABELS=(
-    [brain]="🧠 Brain (Orchestrator, user-facing)"
+    [brain]="🧠 Cortex (Orchestrator, user-facing)"
     [builder]="🔨 Builder (Code generation)"
     [researcher]="🔬 Researcher (Research, synthesis)"
     [verifier]="✅ Verifier (Fact verification)"

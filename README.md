@@ -10,7 +10,7 @@
 
 ## What Is This?
 
-A team of 5 AI agents that live on your VPS, talk to you on Telegram, and **never forget anything**. One install command runs a beautiful setup wizard. Minutes later, you're chatting with Brain — your personal AI chief of staff — backed by a Builder, Researcher, Verifier, and Guardian that work behind the scenes.
+A team of 5 AI agents that live on your VPS, talk to you on Telegram, and **never forget anything**. One install command runs a beautiful setup wizard. Minutes later, you're chatting with Cortex — your personal AI chief of staff — backed by a Builder, Researcher, Verifier, and Guardian that work behind the scenes.
 
 No Docker. No Redis. No YAML files. Just one SQLite database and a system that gets smarter every conversation.
 
@@ -20,7 +20,7 @@ No Docker. No Redis. No YAML files. Just one SQLite database and a system that g
 
 | | Feature | Details |
 |---|---------|---------|
-| 🧠 | **5 Specialized Agents** | Brain orchestrates, Builder codes, Researcher researches, Verifier verifies, Guardian protects |
+| 🧠 | **5 Specialized Agents** | Cortex orchestrates, Builder codes, Researcher researches, Verifier verifies, Guardian protects |
 | 💾 | **Advanced Memory System** | Importance scoring, semantic search, deduplication, automatic consolidation |
 | 🧙 | **One-Command Installer** | Beautiful TUI wizard powered by [gum](https://github.com/charmbracelet/gum) — no config files to edit |
 | 🔗 | **Knowledge Graph** | Memories link to related memories — "likes Python" connects to "builds ML pipelines" |
@@ -46,7 +46,7 @@ curl -fsSL https://raw.githubusercontent.com/jasonxwu2794/MemoryEnhancedMultiAge
 4. **Agents deploy** — Brain says hello on your chosen platform:
 
 ```
-Hey! 👋 I'm Brain, your AI assistant. I'm all set up and ready to help
+Hey! 👋 I'm Cortex, your AI assistant. I'm all set up and ready to help
 with your work. What would you like to start with?
 ```
 
@@ -60,7 +60,7 @@ That's it. You're talking to a 5-agent AI system with persistent memory.
 
 | Agent | Role | What It Does |
 |-------|------|-------------|
-| 🧠 **Brain** | Chief of Staff | Talks to you, classifies intent, delegates tasks, synthesizes responses |
+| 🧠 **Cortex** | Chief of Staff | Talks to you, classifies intent, delegates tasks, synthesizes responses |
 | 🔨 **Builder** | Engineer | Generates code, runs tools, debugs — sandboxed, no internet access |
 | 🔬 **Researcher** | Researcher | Searches the web, reads docs, synthesizes findings in parallel |
 | ✅ **Verifier** | Verifier | Verifies claims, catches hallucinations, updates the knowledge cache |
@@ -73,7 +73,7 @@ That's it. You're talking to a 5-agent AI system with persistent memory.
           │
           ▼
     ┌───────────┐
-    │  🧠 Brain  │◄── Memory Engine (SQLite)
+    │ 🧠 Cortex  │◄── Memory Engine (SQLite)
     └─────┬─────┘
           │ delegates
     ┌─────┼─────────────┐
@@ -82,7 +82,7 @@ That's it. You're talking to a 5-agent AI system with persistent memory.
 Builder Researcher Verifier Guardian
 ```
 
-- Brain is the **only agent you talk to** — it presents a unified experience
+- Cortex is the **only agent you talk to** — it presents a unified experience
 - Other agents are spawned on-demand as sub-sessions
 - All communication flows through a **SQLite message bus**
 - Each agent only sees the context it needs (token-efficient)
@@ -128,13 +128,13 @@ The wizard walks you through everything. No config files. Re-run anytime with `.
 2. **OpenClaw install** — sets up the agent runtime + systemd service
 3. **Configuration mode** — ⚡ Recommended (defaults) or ⚙️ Custom (full control)
 4. **About you** — name, domain, current work (personalizes all agents)
-5. **Brain's personality** — communication style, verbosity, custom notes
+5. **Cortex's personality** — communication style, verbosity, custom notes
 6. **Model selection** — pick an LLM for each agent with cost estimates
 7. **API keys** — guided entry with instant validation
 8. **Memory tier** — Full / Standard / Minimal + embedding choice
 9. **Messaging platform** — Telegram, Discord, Signal, or CLI
 10. **Tool selection** — web search, GitHub, file access, code execution
-11. **Deploy** — generates configs, starts agents, Brain says hello
+11. **Deploy** — generates configs, starts agents, Cortex says hello
 
 ---
 
