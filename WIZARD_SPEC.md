@@ -96,24 +96,23 @@ curl ... | bash
 
 ---
 
-## Step 3: Use Case Selection
+## Step 3: Configuration Mode
 
-**Purpose:** Set system-level defaults based on what the user wants to do. This is the most impactful single choice — it configures sensible defaults for models, tools, and memory that the user can override in later steps.
+**Purpose:** Let the user decide how hands-on they want to be with setup.
 
 ### Options
 
-| Use Case | Description | Default Model Tier | Default Memory | Default Tools |
-|----------|-------------|-------------------|----------------|---------------|
-| 🤖 **General Assistant** | Everyday AI helper — email, research, scheduling | Mid-range | Standard | Web search, file access |
-| 💻 **Coding Partner** | Development-focused — code gen, review, debugging | Code-optimized | Full | GitHub, code exec, file access, web search |
-| 🔬 **Research Analyst** | Deep research — synthesis, fact-checking, reports | Reasoning-heavy | Full | Web search, file access |
-| ⚙️ **Custom** | Pick everything yourself | — | — | — |
+| Mode | Description |
+|------|-------------|
+| ⚡ **Recommended** | Sensible defaults pre-filled. Walk through each step, tweak what you want. |
+| ⚙️ **Custom** | Every field starts blank. Full control over every choice. |
 
 ### Behavior
 
 - `gum choose` with descriptions
-- Selection sets defaults for Steps 6, 8, and 10
-- User can still override any default in those steps
+- **Recommended** pre-fills all subsequent steps with sensible defaults (Claude for Brain, DeepSeek for Builder, Standard memory, etc.)
+- **Custom** leaves all fields blank — user chooses everything
+- In both modes, every step is shown and editable — Recommended just saves time
 - Choice is stored in config for `--reconfigure` awareness
 
 ---
@@ -256,15 +255,15 @@ Other agents do **NOT** get personality customization. They have fixed, professi
 | ✅ **Checker** (Fact Checker) | Verification, accuracy | Claude, Qwen | Precise, detail-oriented |
 | 🛡️ **Guardian** | Security, safety review | Claude | Security-minded |
 
-### Use Case Defaults
+### Recommended Defaults
 
-| Agent | General Assistant | Coding Partner | Research Analyst |
-|-------|------------------|----------------|-----------------|
-| Brain | Claude | Claude | Claude |
-| Builder | DeepSeek | DeepSeek | DeepSeek |
-| Scout | Qwen | Qwen | Claude |
-| Checker | Qwen | Qwen | Claude |
-| Guardian | Claude | Claude | Claude |
+| Agent | Default Model |
+|-------|--------------|
+| Brain | Claude Sonnet 4 |
+| Builder | DeepSeek |
+| Scout | Qwen Max |
+| Checker | Qwen Max |
+| Guardian | Claude Sonnet 4 |
 
 ### Cost Estimates
 
@@ -335,11 +334,22 @@ Model Selection — Brain 🧠
 | 📝 **Standard** | Balanced — daily logs, curated long-term memory | ~10-50MB/mo | Moderate | Good |
 | 📌 **Minimal** | Essentials — key decisions and active context only | ~1-10MB/mo | Low | Basic |
 
+### Embeddings
+
+After tier selection, ask how to generate embeddings:
+
+| Option | Description |
+|--------|-------------|
+| 🏠 **Local (free, private)** [Recommended] | MiniLM-L6-v2 (~80MB, runs on CPU). ~95% quality of API models. No API calls, no cost, data stays local. |
+| ☁️ **API (slightly better, costs per call)** | OpenAI, Voyage, or Cohere embeddings. Maximum quality. Requires API key, costs per call. |
+
+Default: **Local**. Wizard downloads MiniLM model during setup if selected.
+
 ### Behavior
 
 - `gum choose` with trade-off descriptions
 - Default set by Step 3 use case
-- Configures memory retention policies, cleanup schedules, and context window allocation
+- Configures memory retention policies, cleanup schedules, context window allocation, and embedding provider
 
 ---
 
@@ -482,7 +492,7 @@ Running `./wizard.sh --reconfigure`:
 {
   "version": 1,
   "timestamp": "2026-02-13T02:30:00Z",
-  "use_case": "coding_partner",
+  "config_mode": "recommended",
   "user": {
     "name": "Jason",
     "preferred_name": "Jase",

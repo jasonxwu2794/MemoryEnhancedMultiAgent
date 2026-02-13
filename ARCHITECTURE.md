@@ -96,31 +96,144 @@ Brain acts as a privacy/relevance filter. Each agent ONLY receives the context i
 ## Memory Architecture
 
 ### Three Tiers
-1. **Working Memory**: Current conversation context (in-context window)
-2. **Short-term Memory**: Recent interactions, high recency score (SQLite + embeddings)
-3. **Long-term Memory**: Consolidated knowledge, high importance score (SQLite)
+1. **Working Memory** — Current conversation in the context window. Free, instant, ephemeral.
+2. **Short-term Memory** — Recent interactions stored in SQLite with embeddings. Scored by recency (exponential decay, 7-day half-life) and importance.
+3. **Long-term Memory** — Consolidated knowledge in SQLite. High importance, low decay. Created by consolidation jobs from short-term clusters.
 
 ### Knowledge Cache
-Verified facts stored in SQLite with no decay. Updated by Fact Checker and Researcher.
+Verified facts stored in SQLite with NO decay. Updated by Checker and Scout. Examples: confirmed API specs, validated user preferences, verified research findings. Always checked first during retrieval.
+
+### Embeddings
+- **Default: Local** — MiniLM-L6-v2 (~80MB, runs on CPU, free, private). ~95% quality of API models for similarity tasks.
+- **Optional: API** — OpenAI, Voyage, or Cohere embeddings for maximum quality. Costs per call.
+- Wizard lets user choose. Default is local.
 
 ### Scoring System
 Each memory gets a composite score:
-- **Semantic similarity**: Cosine distance from query embedding
-- **Recency score**: Exponential decay with 7-day half-life
-- **Importance score**: Heuristic based on signals (user explicit, decision, error correction, preference, repetition)
+- **Semantic similarity**: Cosine distance between query embedding and memory embedding
+- **Recency score**: Exponential decay with 7-day half-life. Formula: `recency = exp(-0.693 * days_old / 7)`
+- **Importance score**: Heuristic based on signals:
+  - User corrections/preferences: HIGH (0.8-1.0)
+  - Decisions and commitments: HIGH (0.7-0.9)
+  - Error corrections: HIGH (0.8)
+  - Repeated topics: MEDIUM (boosted on each repetition)
+  - General conversation: LOW (0.1-0.3)
+  - Feedback-adjusted: User confirms ("that's right") boosts importance, user denies ("that's outdated") decays importance
 
 ### Retrieval Strategies
 - `"balanced"`: 0.4 semantic + 0.3 recency + 0.3 importance
 - `"recency"`: 0.3 semantic + 0.5 recency + 0.2 importance
 - `"importance"`: 0.3 semantic + 0.2 recency + 0.5 importance
-- `"exact"`: Check knowledge cache first, fallback to semantic
+- `"exact"`: Check knowledge cache first, fallback to semantic search
+
+### Context Window Budget
+Hard cap prevents context overflow:
+```
+Total context window: 100%
+├── System prompt + SOUL.md:     ~10%
+├── Memory injection:            ~15% (hard cap)
+│   ├── Knowledge cache hits:    priority 1
+│   ├── Long-term memories:      priority 2
+│   └── Short-term memories:     priority 3
+├── Conversation history:        ~65%
+└── Response buffer:             ~10%
+```
+Smart retrieval: rank all matching memories, include only top 3-5 that fit in budget. If conversation is long, memory gets squeezed. If short, memory gets more room.
+
+### Deduplication
+On every new memory ingest:
+1. **Exact/near duplicate** (similarity > 0.92) → Don't store. Boost importance of existing memory. Update timestamp.
+2. **Related but different** (similarity 0.7-0.92) → Store new memory. Create link to related memory.
+3. **Novel** (similarity < 0.7) → Store as fresh memory.
+
+### Knowledge Graph (Lightweight)
+SQLite table `memory_links`:
+```sql
+CREATE TABLE memory_links (
+    memory_id_a TEXT,
+    memory_id_b TEXT,
+    relation_type TEXT,  -- 'supersedes', 'related_to', 'contradicts', 'elaborates'
+    strength REAL,
+    created_at TIMESTAMP
+);
+```
+When Brain retrieves a memory, it follows links to pull related context. "User likes Python" → links to "User builds ML pipelines" → links to "User prefers PyTorch." One retrieval gives a cluster of connected knowledge.
+
+### Memory Conflict Resolution
+When new memory contradicts an existing one (detected via dedup check + LLM classification):
+1. Mark old memory with relation `superseded_by` → new memory
+2. Decay old memory's importance to near-zero (don't delete — audit trail)
+3. New memory inherits old one's links
+4. Guardian notified of conflict for logging
+
+### Consolidation
+**Daily job (Full tier) / Weekly job (Standard tier):**
+1. Scan short-term memories older than 7 days
+2. Cluster by similarity (group related memories)
+3. LLM summarizes each cluster into one long-term memory (uses cheapest model — DeepSeek or Qwen)
+4. Summary gets importance = max(cluster importance scores)
+5. Delete originals from short-term, keep links to summary
+6. Update knowledge graph links to point to consolidated memory
+
+**Full tier:** Daily consolidation, keeps everything
+**Standard tier:** Weekly consolidation, prunes low-importance memories (below 0.3 threshold)
+
+### Cross-Agent Memory
+- Scout discovers info during research → writes to knowledge cache
+- Checker verifies claims → writes to knowledge cache
+- Brain reads knowledge cache automatically on next relevant query
+- System gets smarter over time without user doing anything
+
+### Feedback-Driven Importance
+When Brain retrieves a memory and user responds:
+- Positive signal ("exactly", "that's right") → boost importance by 0.1
+- Negative signal ("that's outdated", "wrong") → decay importance by 0.3 or mark superseded
+- Brain detects these signals naturally during conversation, no explicit UI needed
 
 ### Memory Permissions
 - **Brain**: Read + write shared memory (gatekeeper)
 - **Builder**: Read shared memory only
-- **Fact Checker**: Read shared memory, write knowledge cache
-- **Researcher**: Read shared memory, write knowledge cache
+- **Checker**: Read shared memory, write knowledge cache
+- **Scout**: Read shared memory, write knowledge cache
 - **Guardian**: Read all memory (audit), no writes
+
+### SQLite Schema Overview
+```sql
+-- Core memories table
+CREATE TABLE memories (
+    id TEXT PRIMARY KEY,
+    content TEXT NOT NULL,
+    embedding BLOB,
+    tier TEXT CHECK(tier IN ('short_term', 'long_term')),
+    importance REAL DEFAULT 0.5,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    access_count INTEGER DEFAULT 0,
+    source_agent TEXT,
+    metadata JSON
+);
+
+-- Verified facts (no decay)
+CREATE TABLE knowledge_cache (
+    id TEXT PRIMARY KEY,
+    fact TEXT NOT NULL,
+    embedding BLOB,
+    source TEXT,
+    verified_by TEXT,
+    verified_at TIMESTAMP,
+    confidence REAL DEFAULT 1.0,
+    metadata JSON
+);
+
+-- Knowledge graph links
+CREATE TABLE memory_links (
+    memory_id_a TEXT,
+    memory_id_b TEXT,
+    relation_type TEXT,
+    strength REAL DEFAULT 1.0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
 
 ## Config System
 
