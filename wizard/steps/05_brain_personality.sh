@@ -56,7 +56,7 @@ echo ""
 gum style --foreground 212 "Agent transparency:"
 VERBOSE_OPTS=("Stealth — Brain handles everything silently, clean unified responses" "Verbose — Show when agents are working (🔬 Researcher is researching...)")
 
-DEF_VERBOSE="$(state_get 'brain.verbose_mode' 'stealth')"
+DEF_VERBOSE="$(state_get 'brain.verbose_mode' 'verbose')"
 VERBOSE_CHOICE="$(gum choose "${VERBOSE_OPTS[@]}")"
 case "$VERBOSE_CHOICE" in
     Verbose*) VERBOSE_MODE="verbose" ;;

@@ -229,7 +229,7 @@ class BrainAgent(BaseAgent):
         AgentRole.GUARDIAN: "🛡️ Guardian is reviewing security...",
     }
 
-    def __init__(self, memory_db_path: str = "data/memory.db", verbose_mode: str = "stealth",
+    def __init__(self, memory_db_path: str = "data/memory.db", verbose_mode: str = "verbose",
                  workspace_path: str = "/workspace", **kwargs):
         memory = MemoryEngine(db_path=memory_db_path)
         super().__init__(memory=memory, **kwargs)

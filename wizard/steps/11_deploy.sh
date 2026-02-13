@@ -25,7 +25,7 @@ BRAIN_NOTES="$(state_get 'brain.personality_notes')"
 MEMORY_TIER="$(state_get 'memory_tier' 'standard')"
 MESSAGING="$(state_get 'messaging' 'cli')"
 
-VERBOSE_MODE="$(state_get 'brain.verbose_mode' 'stealth')"
+VERBOSE_MODE="$(state_get 'brain.verbose_mode' 'verbose')"
 TECH_LANGUAGE="$(state_get 'tech_stack.language' '')"
 TECH_FRAMEWORKS="$(state_get 'tech_stack.frameworks' '')"
 TECH_PKG_MANAGER="$(state_get 'tech_stack.package_manager' '')"
@@ -821,5 +821,26 @@ gum style \
 echo ""
 log_info "To reconfigure later: ./wizard/wizard.sh --reconfigure"
 log_info "Workspace files: $OC_WORKSPACE"
+
+echo ""
+gum style \
+    --border normal \
+    --border-foreground 240 \
+    --padding "1 2" \
+    --margin "0 4" \
+    "📋 What to try next:" \
+    "" \
+    "  □ Say hello — test that Cortex responds" \
+    "  □ Drop your first idea — /idea build a REST API" \
+    "  □ Ask a question — Researcher kicks in automatically" \
+    "  □ Check verbose mode — agent activity is visible by default" \
+    "  □ Morning digest arrives at your configured time" \
+    "" \
+    "  Power moves:" \
+    "  □ /project — see your project board" \
+    "  □ /ideas — browse your idea backlog" \
+    "  □ /status — system health" \
+    "" \
+    "  Debug: see docs/DEBUG_CHECKLIST.md"
 
 wizard_success "Your multi-agent system is live! 🚀"
