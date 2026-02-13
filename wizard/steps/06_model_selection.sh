@@ -55,8 +55,19 @@ for agent in "${AGENT_ORDER[@]}"; do
         PREV="${DEFAULTS[$agent]}"
     fi
 
+    # Build --selected flag if we have a previous/default
+    SELECTED_FLAG=()
+    if [ -n "$PREV" ]; then
+        for entry in "${MODEL_NAMES[@]}"; do
+            if [[ "$entry" == "$PREV"* ]]; then
+                SELECTED_FLAG=(--selected "$entry")
+                break
+            fi
+        done
+    fi
+
     # Show cost table and let user choose
-    CHOICE="$(gum choose --header "Select model:" "${MODEL_NAMES[@]}")"
+    CHOICE="$(gum choose --header "Select model:" "${SELECTED_FLAG[@]}" "${MODEL_NAMES[@]}")"
 
     # Extract model slug from choice
     CHOSEN_NAME="$(echo "$CHOICE" | sed 's/  .*//')"

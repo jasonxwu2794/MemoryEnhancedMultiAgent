@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # ============================================================================
 # Step 8: Memory Setup
-# Choose memory tier: Full, Standard, or Minimal.
+# Choose memory tier: Full or Standard.
 # ============================================================================
 
 wizard_header "8" "Memory Setup" "How much context should your agents remember?"
 
 PREV_TIER="$(state_get 'memory_tier' '')"
 if [ -z "$PREV_TIER" ] && is_recommended; then
-    PREV_TIER="standard"
+    PREV_TIER="full"
 fi
 
 gum style --foreground 250 --padding "0 2" \
@@ -16,21 +16,22 @@ gum style --foreground 250 --padding "0 2" \
     "             Storage: ~50-200MB/mo  |  Token usage: Higher  |  Recall: Best" \
     "" \
     "📝 Standard — Balanced: daily logs + curated long-term memory" \
-    "             Storage: ~10-50MB/mo   |  Token usage: Moderate |  Recall: Good" \
-    "" \
-    "📌 Minimal  — Essentials: key decisions and active context only" \
-    "             Storage: ~1-10MB/mo    |  Token usage: Low      |  Recall: Basic"
+    "             Storage: ~10-50MB/mo   |  Token usage: Moderate |  Recall: Good"
 
 echo ""
 
-TIER_CHOICE="$(gum choose \
-    "📚 Full — Maximum recall, higher cost" \
-    "📝 Standard — Balanced (recommended)" \
-    "📌 Minimal — Low overhead, basic recall")"
+OPT_FULL="📚 Full — Maximum recall (recommended)"
+OPT_STD="📝 Standard — Balanced, lower cost"
+
+SELECTED_OPT="$OPT_FULL"
+if [ "$PREV_TIER" = "standard" ]; then
+    SELECTED_OPT="$OPT_STD"
+fi
+
+TIER_CHOICE="$(gum choose --selected "$SELECTED_OPT" "$OPT_FULL" "$OPT_STD")"
 
 case "$TIER_CHOICE" in
     *Full*)     TIER="full"     ;;
-    *Minimal*)  TIER="minimal"  ;;
     *)          TIER="standard" ;;
 esac
 
