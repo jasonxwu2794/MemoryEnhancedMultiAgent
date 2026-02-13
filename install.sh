@@ -83,13 +83,19 @@ install_gum() {
     curl -fsSL "$url" -o "$tmp/gum.tar.gz" || fail "Failed to download gum"
     tar -xzf "$tmp/gum.tar.gz" -C "$tmp" || fail "Failed to extract gum"
 
+    # Find the gum binary (may be nested in a subdirectory)
+    local gum_bin
+    gum_bin="$(find "$tmp" -name gum -type f -perm -u+x 2>/dev/null | head -1)"
+    [ -z "$gum_bin" ] && gum_bin="$(find "$tmp" -name gum -type f 2>/dev/null | head -1)"
+    [ -z "$gum_bin" ] && fail "Could not find gum binary in archive"
+
     # Install to /usr/local/bin or fall back to ~/.local/bin
     if [ -w /usr/local/bin ]; then
-        cp "$tmp/gum" /usr/local/bin/gum
+        cp "$gum_bin" /usr/local/bin/gum
         chmod +x /usr/local/bin/gum
     else
         mkdir -p "$HOME/.local/bin"
-        cp "$tmp/gum" "$HOME/.local/bin/gum"
+        cp "$gum_bin" "$HOME/.local/bin/gum"
         chmod +x "$HOME/.local/bin/gum"
         export PATH="$HOME/.local/bin:$PATH"
         warn "Installed gum to ~/.local/bin — make sure it's in your PATH"
