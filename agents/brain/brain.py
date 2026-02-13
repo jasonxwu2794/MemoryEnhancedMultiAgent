@@ -23,7 +23,7 @@ from agents.common.protocol import (
     AgentRole, AgentMessage, TaskStatus, ContextScope,
 )
 from agents.session_manager import AgentSessionManager, DelegationTask
-from agents.brain.project_manager import ProjectManager, Task as ProjectTask, ProjectStatus
+from agents.brain.project_manager import ProjectManager, Task as ProjectTask, Feature, Idea, ProjectStatus
 from agents.brain import spec_writer, task_decomposer
 from agents.common.gitops import GitOps
 from memory.engine import MemoryEngine, Turn
@@ -39,6 +39,7 @@ INTENT_FACTUAL = "factual_question"
 INTENT_RESEARCH = "research_request"
 INTENT_COMPLEX = "complex_task"
 INTENT_PROJECT = "project_request"
+INTENT_IDEA = "idea_suggestion"
 
 VALID_INTENTS = {
     INTENT_SIMPLE_CHAT,
@@ -47,6 +48,7 @@ VALID_INTENTS = {
     INTENT_RESEARCH,
     INTENT_COMPLEX,
     INTENT_PROJECT,
+    INTENT_IDEA,
 }
 
 # Max conversation turns to keep in working memory
@@ -69,7 +71,8 @@ Categories:
 - "build_request": Code generation, file creation/editing, tool execution, automation, debugging, anything that produces artifacts.
 - "factual_question": Specific factual claims to verify, "is this true?", data lookups, corrections.
 - "research_request": Open-ended investigation, comparisons, "find out about...", market research, multi-source synthesis.
-- "project_request": Multi-step project requests ("I want to build...", "let's create...", "can you make..."), project status queries, pause/cancel project commands.
+- "idea_suggestion": User is suggesting an idea for the backlog, not committing to build now. ("we should build...", "idea:", "what if we...", "maybe we could..."), or querying their backlog ("show ideas", "what's in my backlog").
+- "project_request": Committed project requests ("let's build...", "start project...", "build this now"), project status queries, pause/cancel project commands, promoting/archiving ideas.
 - "complex_task": Requires MULTIPLE specialists. e.g. "Research X and then build Y based on findings."
 
 For "complex_task", also provide a decomposition into ordered subtasks.
@@ -354,6 +357,9 @@ class BrainAgent(BaseAgent):
                 action="research",
                 context_fn=self._scope_investigator_context,
             )
+
+        elif intent == INTENT_IDEA:
+            response = await self._handle_idea(user_message)
 
         elif intent == INTENT_PROJECT:
             response = await self._handle_project(user_message)
@@ -1071,6 +1077,39 @@ class BrainAgent(BaseAgent):
         }
         return mapping.get(agent_str, AgentRole.BUILDER)
 
+    # ─── Idea Mode ────────────────────────────────────────────────
+
+    async def _handle_idea(self, user_message: str) -> dict:
+        """Handle idea suggestions and backlog queries."""
+        msg_lower = user_message.lower().strip()
+
+        # Backlog query
+        if self.project_manager.detect_backlog_query(user_message):
+            summary = self.project_manager.get_backlog_summary()
+            return {"response": summary, "intent": INTENT_IDEA, "delegated": False}
+
+        # Add to backlog
+        # Extract a title from the message
+        title = user_message.strip()
+        # Clean up common prefixes
+        for prefix in ["idea:", "what if we", "maybe we could", "we should build", "how about we build",
+                        "wouldn't it be cool if we", "i've been thinking about", "here's an idea:"]:
+            if title.lower().startswith(prefix):
+                title = title[len(prefix):].strip()
+                break
+        title = title[:80] if title else user_message[:80]
+
+        idea = self.project_manager.add_idea(title=title, description=user_message)
+        backlog = self.project_manager.list_ideas()
+        count = len(backlog)
+
+        response = (
+            f"💡 Added to your backlog: **{idea.title}**\n\n"
+            f"You now have {count} idea(s). Say 'show backlog' to see them all, "
+            f"or 'promote idea {count}' when you're ready to build it."
+        )
+        return {"response": response, "intent": INTENT_IDEA, "delegated": False}
+
     # ─── Project Mode ───────────────────────────────────────────────
 
     async def _handle_project(self, user_message: str) -> dict:
@@ -1083,11 +1122,50 @@ class BrainAgent(BaseAgent):
         """
         msg_lower = user_message.lower().strip()
 
+        # Check for promote idea
+        import re
+        promote_match = re.search(r"(?:promote|let'?s do|start)\s+(?:idea\s*)?#?(\d+)", msg_lower)
+        if promote_match:
+            idx = int(promote_match.group(1)) - 1
+            ideas = self.project_manager.list_ideas()
+            if 0 <= idx < len(ideas):
+                idea = ideas[idx]
+                try:
+                    project = self.project_manager.promote_idea(idea.id)
+                    return await self._create_new_project(idea.description, project=project)
+                except ValueError as e:
+                    return {"response": f"⚠️ {e}", "intent": INTENT_PROJECT, "delegated": False}
+            return {"response": f"⚠️ No idea #{idx + 1} in backlog.", "intent": INTENT_PROJECT, "delegated": False}
+
+        # Check for archive idea
+        archive_match = re.search(r"(?:archive|forget about|remove)\s+(?:idea\s*)?#?(\d+)", msg_lower)
+        if archive_match:
+            idx = int(archive_match.group(1)) - 1
+            ideas = self.project_manager.list_ideas()
+            if 0 <= idx < len(ideas):
+                self.project_manager.archive_idea(ideas[idx].id)
+                return {"response": f"🗑️ Archived idea: **{ideas[idx].title}**", "intent": INTENT_PROJECT, "delegated": False}
+            return {"response": f"⚠️ No idea #{idx + 1} in backlog.", "intent": INTENT_PROJECT, "delegated": False}
+
+        # Check for backlog query (also handled via project intent)
+        if self.project_manager.detect_backlog_query(user_message):
+            summary = self.project_manager.get_backlog_summary()
+            return {"response": summary, "intent": INTENT_PROJECT, "delegated": False}
+
         # Check for status query
         if any(kw in msg_lower for kw in ["status", "progress", "how's the project", "where are we"]):
             active = self.project_manager.get_active_project()
             if not active:
                 return {"response": "No active project right now. Want to start one?", "intent": INTENT_PROJECT, "delegated": False}
+            # Use feature-level status if features exist
+            features = self.project_manager.get_features(active.id)
+            if features:
+                full = self.project_manager.get_full_status(active.id)
+                return {
+                    "response": self._format_full_status(full),
+                    "intent": INTENT_PROJECT,
+                    "delegated": False,
+                }
             status = self.project_manager.get_status(active.id)
             return {
                 "response": self._format_project_status(status),
@@ -1118,35 +1196,69 @@ class BrainAgent(BaseAgent):
         # New project creation
         return await self._create_new_project(user_message)
 
-    async def _create_new_project(self, user_message: str) -> dict:
-        """Create a new project: write spec, decompose, show to user."""
+    async def _create_new_project(self, user_message: str, project=None) -> dict:
+        """Create a new project: write spec, decompose into features+tasks, show to user."""
         # Generate spec
         spec = await spec_writer.write_spec(self.llm, user_message)
 
-        # Create project
-        # Extract a short name from the spec
-        name_line = spec.split("\n")[0] if spec else user_message[:50]
-        name = name_line.replace("# Project:", "").replace("#", "").strip()[:60] or "New Project"
+        if not project:
+            # Extract a short name and domain from the spec
+            name_line = spec.split("\n")[0] if spec else user_message[:50]
+            name = name_line.replace("# Project:", "").replace("#", "").strip()[:60] or "New Project"
 
-        project = self.project_manager.create_project(
-            name=name,
-            description=user_message,
-            spec=spec,
-        )
+            # Try to extract domain from spec
+            domain = None
+            for line in spec.split("\n"):
+                if line.strip().startswith("## Domain"):
+                    continue
+                if domain is None and line.strip() and not line.startswith("#"):
+                    # First non-header line after ## Domain
+                    pass
+            # Simple extraction: look for domain line
+            import re
+            domain_match = re.search(r"## Domain\s*\n\s*(\w+)", spec)
+            if domain_match:
+                domain = domain_match.group(1)
 
-        # Decompose into tasks
-        tasks = await task_decomposer.decompose(self.llm, spec, project.id)
-        self.project_manager.decompose_into_tasks(project.id, tasks)
+            project = self.project_manager.create_project(
+                name=name,
+                description=user_message,
+                spec=spec,
+                domain=domain,
+            )
+        else:
+            # Project already created (from promote_idea), update spec
+            conn = self.project_manager._conn()
+            conn.execute("UPDATE projects SET spec = ? WHERE id = ?", (spec, project.id))
+            conn.commit()
+            conn.close()
+            name = project.name
+
+        # Decompose into features with tasks
+        features = await task_decomposer.decompose(self.llm, spec, project.id)
+
+        # Store features and tasks
+        all_tasks = []
+        for feat in features:
+            self.project_manager.add_features(project.id, [feat])
+            all_tasks.extend(feat.tasks)
+
+        if all_tasks:
+            self.project_manager.decompose_into_tasks(project.id, all_tasks)
 
         # Format response
-        task_list = "\n".join(
-            f"  {i+1}. [{t.agent}] {t.title}" for i, t in enumerate(tasks)
-        )
+        feature_lines = []
+        for feat in features:
+            task_list = "\n".join(f"    - [{t.agent}] {t.title}" for t in feat.tasks)
+            feature_lines.append(f"  **{feat.title}** ({len(feat.tasks)} tasks)\n{task_list}")
+
+        total_tasks = sum(len(f.tasks) for f in features)
         response = (
             f"📋 **Project: {name}**\n\n"
             f"{spec}\n\n"
             f"---\n"
-            f"**Task Plan ({len(tasks)} tasks):**\n{task_list}\n\n"
+            f"**Plan: {len(features)} features, {total_tasks} tasks:**\n"
+            + "\n".join(feature_lines) + "\n\n"
             f"I'll start working on this now. Say 'project status' anytime to check progress."
         )
 
@@ -1215,6 +1327,22 @@ class BrainAgent(BaseAgent):
                 "intent": INTENT_PROJECT,
                 "delegated": False,
             }
+
+    def _format_full_status(self, full: dict) -> str:
+        """Format feature-level project status."""
+        domain_tag = f" [{full['domain']}]" if full.get("domain") else ""
+        parts = [
+            f"📊 **{full['name']}**{domain_tag}",
+            f"Progress: {full['progress']}",
+            "",
+        ]
+        for feat in full.get("features", []):
+            icon = {"completed": "✅", "in_progress": "🔄", "pending": "⏳"}.get(feat["status"], "⏳")
+            line = f"  {icon} **{feat['name']}** — {feat['tasks']}"
+            if feat.get("current_task"):
+                line += f" (current: {feat['current_task']})"
+            parts.append(line)
+        return "\n".join(parts)
 
     def _format_project_status(self, status: ProjectStatus) -> str:
         """Format a project status into a readable message."""

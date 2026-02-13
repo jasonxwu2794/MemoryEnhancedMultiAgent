@@ -20,8 +20,14 @@ Generate a SPEC.md in this exact format:
 
 # Project: <name>
 
+## Domain
+<one-word domain tag: ML, Web, DevOps, Mobile, Data, CLI, API, etc.>
+
 ## Overview
 <2-3 sentence summary of what this project does and why>
+
+## Feature Groupings
+<list the logical feature groups for this project, e.g. Auth, Upload, Queue>
 
 ## Requirements
 ### Must Have
