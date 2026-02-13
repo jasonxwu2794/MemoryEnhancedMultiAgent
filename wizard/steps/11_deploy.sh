@@ -431,7 +431,7 @@ BRAIN_MODEL_ID="$(brain_model_id "$MODEL_BRAIN")"
 OC_JSON="$(echo "$OC_JSON" | jq \
     --arg model "$BRAIN_MODEL_ID" \
     --arg ws "$OC_WORKSPACE" \
-    '.agents.defaults.models.default = $model |
+    '.agents.defaults.model.primary = $model |
      .agents.defaults.workspace = $ws |
      .agents.defaults.maxConcurrent = (.agents.defaults.maxConcurrent // 4) |
      .agents.defaults.subagents.maxConcurrent = (.agents.defaults.subagents.maxConcurrent // 8)')"
@@ -441,10 +441,16 @@ case "$MESSAGING" in
     telegram)
         TELEGRAM_TOKEN="$(state_get 'telegram_token' '')"
         if [ -n "$TELEGRAM_TOKEN" ]; then
+            TELEGRAM_OWNER="$(state_get 'telegram_owner' '')"
             OC_JSON="$(echo "$OC_JSON" | jq \
                 --arg token "$TELEGRAM_TOKEN" \
+                --arg owner "$TELEGRAM_OWNER" \
                 '.channels.telegram.enabled = true |
                  .channels.telegram.botToken = $token |
+                 .channels.telegram.dmPolicy = "allowAll" |
+                 .channels.telegram.groupPolicy = "allowAll" |
+                 .channels.telegram.streamMode = "edit" |
+                 (if $owner != "" then .channels.telegram.allowedUsers = [$owner] else . end) |
                  .plugins.entries.telegram.enabled = true')"
             log_ok "Telegram channel configured"
         fi
