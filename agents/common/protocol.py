@@ -1,4 +1,8 @@
-"""Agent communication protocol — message types, roles, and SQLite message bus."""
+"""Agent communication protocol — message types, roles, and SQLite message bus.
+
+MessageBus: Internal message queue for status updates and Guardian monitoring.
+Not used for primary delegation — see session_manager.py for that.
+"""
 
 from __future__ import annotations
 

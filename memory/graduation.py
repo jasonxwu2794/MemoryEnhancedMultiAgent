@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ def run_graduation(db_path: str | Path) -> dict:
     conn.row_factory = sqlite3.Row
     _ensure_columns(conn)
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     promoted = 0
     decayed = 0
     flagged_for_reverify = 0

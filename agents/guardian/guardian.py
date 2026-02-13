@@ -26,13 +26,14 @@ import os
 import re
 import time
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
 from agents.common.base_agent import BaseAgent
 from agents.common.protocol import AgentRole, AgentMessage, TaskStatus
 from agents.common.usage_tracker import UsageTracker
+from agents.common.secret_scanner import SECRET_PATTERNS as CENTRAL_SECRET_PATTERNS, scan_for_secrets
 
 logger = logging.getLogger(__name__)
 
@@ -163,8 +164,8 @@ class GuardianAgent(BaseAgent):
         )
         self._token_counts: dict[str, int] = defaultdict(int)  # agent -> tokens today
         self._hourly_counts: dict[str, int] = defaultdict(int)  # agent -> tokens this hour
-        self._cost_reset_date: str = datetime.utcnow().strftime("%Y-%m-%d")
-        self._hour_reset: int = datetime.utcnow().hour
+        self._cost_reset_date: str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        self._hour_reset: int = datetime.now(timezone.utc).hour
 
         # Security event log (in-memory ring buffer)
         self._security_log: list[dict] = []
@@ -256,7 +257,7 @@ class GuardianAgent(BaseAgent):
         """Periodically reset hourly counters and check daily rollover."""
         while True:
             await asyncio.sleep(60)  # Check every minute
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
             # Hourly reset
             if now.hour != self._hour_reset:
@@ -546,7 +547,7 @@ class GuardianAgent(BaseAgent):
 
     def _rotate_cost_counters(self):
         """Check if we need to reset counters (called on each intercept)."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         today = now.strftime("%Y-%m-%d")
 
         if today != self._cost_reset_date:
@@ -734,7 +735,7 @@ class GuardianAgent(BaseAgent):
     ):
         """Record a security event in the in-memory ring buffer."""
         event = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "task_id": msg.task_id,
             "from_agent": msg.from_agent.value if isinstance(msg.from_agent, AgentRole) else msg.from_agent,
             "to_agent": msg.to_agent.value if isinstance(msg.to_agent, AgentRole) else msg.to_agent,

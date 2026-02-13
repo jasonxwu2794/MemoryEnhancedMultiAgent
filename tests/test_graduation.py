@@ -3,7 +3,7 @@
 import json
 import sqlite3
 import tempfile
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -26,7 +26,7 @@ def _insert_fact(db_path, fact_id, confidence=0.8, access_count=0,
                  age_days=0, last_accessed_days_ago=None, contradicted=False):
     """Helper to insert a fact with specific attributes."""
     conn = sqlite3.connect(db_path)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     verified_at = (now - timedelta(days=age_days)).isoformat()
     last_accessed = None
     if last_accessed_days_ago is not None:

@@ -37,13 +37,19 @@ def lookup_facts(
     db: sqlite3.Connection,
     limit: int = 5,
 ) -> list[dict]:
-    """Retrieve matching facts from the knowledge cache by embedding similarity."""
-    rows = db.execute("SELECT id, fact, embedding, confidence, metadata FROM knowledge_cache").fetchall()
+    """Retrieve matching facts from the knowledge cache by embedding similarity.
+
+    Pre-filters to recent/high-confidence facts to avoid full table scan.
+    """
+    # Only compare against most recent 500 facts (bounded scan)
+    rows = db.execute(
+        "SELECT id, fact, embedding, confidence, metadata FROM knowledge_cache "
+        "WHERE embedding IS NOT NULL "
+        "ORDER BY verified_at DESC LIMIT 500"
+    ).fetchall()
 
     scored: list[tuple[float, dict]] = []
     for row in rows:
-        if row["embedding"] is None:
-            continue
         emb = deserialize_embedding(row["embedding"])
         sim = cosine_similarity(query_embedding, emb)
         scored.append((sim, {

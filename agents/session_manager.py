@@ -1,8 +1,9 @@
 """
-Agent Session Manager — Delegates tasks to specialist agents via OpenClaw session spawning.
+Agent Session Manager — Primary delegation system. Brain uses this to spawn agent sessions.
 
-Instead of using the SQLite message bus for inter-agent communication, this module
-spawns isolated OpenClaw sub-sessions for each agent. Each session gets:
+This is the canonical way Brain delegates work to specialist agents. It spawns
+isolated OpenClaw sub-sessions (not the SQLite MessageBus, which is only for
+internal status updates and Guardian monitoring). Each session gets:
 - The agent's SOUL.md as system context
 - TEAM.md for shared domain awareness
 - Scoped task context from Brain

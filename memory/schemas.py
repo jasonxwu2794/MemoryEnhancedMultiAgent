@@ -46,6 +46,8 @@ CREATE INDEX IF NOT EXISTS idx_memories_created ON memories(created_at);
 CREATE INDEX IF NOT EXISTS idx_memories_tags ON memories(tags);
 CREATE INDEX IF NOT EXISTS idx_links_a ON memory_links(memory_id_a);
 CREATE INDEX IF NOT EXISTS idx_links_b ON memory_links(memory_id_b);
+CREATE INDEX IF NOT EXISTS idx_kc_verified_at ON knowledge_cache(verified_at);
+CREATE INDEX IF NOT EXISTS idx_kc_confidence ON knowledge_cache(confidence);
 """
 
 

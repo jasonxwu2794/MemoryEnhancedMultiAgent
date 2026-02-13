@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Any, Optional
+
+from agents.common.db_helper import SQLiteHelper
 
 _CREATE_TABLE = """\
 CREATE TABLE IF NOT EXISTS activity (
@@ -29,21 +30,9 @@ class ActivityLog:
     """SQLite-backed unified log of every agent action."""
 
     def __init__(self, db_path: str = "data/activity.db"):
-        os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
-        self._db_path = db_path
+        self._db = SQLiteHelper(db_path)
         self._lock = threading.Lock()
-        self._init_db()
-
-    def _conn(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
-
-    def _init_db(self):
-        conn = self._conn()
-        conn.execute(_CREATE_TABLE)
-        conn.commit()
-        conn.close()
+        self._db.executescript(_CREATE_TABLE)
 
     def log(
         self,
@@ -58,55 +47,50 @@ class ActivityLog:
     ):
         meta_json = json.dumps(metadata) if metadata else None
         with self._lock:
-            conn = self._conn()
-            conn.execute(
-                "INSERT INTO activity (agent, action_type, description, task_id, "
-                "project_id, feature_id, metadata, success) VALUES (?,?,?,?,?,?,?,?)",
-                (agent, action_type, description, task_id, project_id, feature_id, meta_json, success),
-            )
-            conn.commit()
-            conn.close()
+            with self._db.connection() as conn:
+                conn.execute(
+                    "INSERT INTO activity (agent, action_type, description, task_id, "
+                    "project_id, feature_id, metadata, success) VALUES (?,?,?,?,?,?,?,?)",
+                    (agent, action_type, description, task_id, project_id, feature_id, meta_json, success),
+                )
+                conn.commit()
 
     def get_recent(self, limit: int = 50, agent: Optional[str] = None) -> list[dict]:
-        conn = self._conn()
-        if agent:
-            rows = conn.execute(
-                "SELECT * FROM activity WHERE agent=? ORDER BY id DESC LIMIT ?",
-                (agent, limit),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT * FROM activity ORDER BY id DESC LIMIT ?", (limit,)
-            ).fetchall()
-        conn.close()
+        with self._db.connection() as conn:
+            if agent:
+                rows = conn.execute(
+                    "SELECT * FROM activity WHERE agent=? ORDER BY id DESC LIMIT ?",
+                    (agent, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM activity ORDER BY id DESC LIMIT ?", (limit,)
+                ).fetchall()
         return [self._row_to_dict(r) for r in rows]
 
     def get_project_activity(self, project_id: str) -> list[dict]:
-        conn = self._conn()
-        rows = conn.execute(
-            "SELECT * FROM activity WHERE project_id=? ORDER BY id ASC", (project_id,)
-        ).fetchall()
-        conn.close()
+        with self._db.connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM activity WHERE project_id=? ORDER BY id ASC", (project_id,)
+            ).fetchall()
         return [self._row_to_dict(r) for r in rows]
 
     def get_timeline(self, hours: int = 24) -> list[dict]:
-        since = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
-        conn = self._conn()
-        rows = conn.execute(
-            "SELECT * FROM activity WHERE timestamp>=? ORDER BY id ASC", (since,)
-        ).fetchall()
-        conn.close()
+        since = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
+        with self._db.connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM activity WHERE timestamp>=? ORDER BY id ASC", (since,)
+            ).fetchall()
         return [self._row_to_dict(r) for r in rows]
 
     def get_summary(self, days: int = 7) -> dict:
-        since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
-        conn = self._conn()
-        rows = conn.execute(
-            "SELECT agent, action_type, COUNT(*) as cnt FROM activity "
-            "WHERE date(timestamp)>=? GROUP BY agent, action_type",
-            (since,),
-        ).fetchall()
-        conn.close()
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+        with self._db.connection() as conn:
+            rows = conn.execute(
+                "SELECT agent, action_type, COUNT(*) as cnt FROM activity "
+                "WHERE date(timestamp)>=? GROUP BY agent, action_type",
+                (since,),
+            ).fetchall()
         summary: dict[str, dict[str, int]] = {}
         for r in rows:
             summary.setdefault(r["agent"], {})[r["action_type"]] = r["cnt"]

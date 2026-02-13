@@ -11,21 +11,9 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+from agents.common.secret_scanner import SECRET_PATTERN_STRINGS as SECRET_PATTERNS, scan_for_secrets
 
-# Patterns that suggest hardcoded secrets
-SECRET_PATTERNS = [
-    (r'sk-[a-zA-Z0-9]{20,}', "OpenAI API key"),
-    (r'sk-ant-[a-zA-Z0-9\-]{20,}', "Anthropic API key"),
-    (r'ghp_[a-zA-Z0-9]{36,}', "GitHub personal access token"),
-    (r'github_pat_[a-zA-Z0-9_]{20,}', "GitHub fine-grained PAT"),
-    (r'gho_[a-zA-Z0-9]{36,}', "GitHub OAuth token"),
-    (r'glpat-[a-zA-Z0-9\-]{20,}', "GitLab personal access token"),
-    (r'xoxb-[a-zA-Z0-9\-]+', "Slack bot token"),
-    (r'xoxp-[a-zA-Z0-9\-]+', "Slack user token"),
-    (r'AKIA[0-9A-Z]{16}', "AWS access key"),
-    (r'(?i)(?:api[_-]?key|apikey|secret[_-]?key|token|password|passwd)\s*[=:]\s*["\']?[a-zA-Z0-9\-_.]{16,}', "Possible hardcoded secret"),
-]
+logger = logging.getLogger(__name__)
 
 # Files that should generally not be committed
 SENSITIVE_FILES = [

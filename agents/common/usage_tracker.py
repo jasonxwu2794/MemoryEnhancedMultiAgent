@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import os
-import sqlite3
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from typing import Optional
+
+from agents.common.db_helper import SQLiteHelper
 
 _CREATE_TABLE = """\
 CREATE TABLE IF NOT EXISTS api_calls (
@@ -46,28 +46,16 @@ def _match_cost_key(model: str, provider: str) -> str:
     for key in COST_TABLE:
         if key in model_lower or key in provider.lower():
             return key
-    return "deepseek"  # cheapest default
+    return "deepseek"
 
 
 class UsageTracker:
     """SQLite-backed persistent tracking of every LLM API call."""
 
     def __init__(self, db_path: str = "data/usage.db"):
-        os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
-        self._db_path = db_path
+        self._db = SQLiteHelper(db_path)
         self._lock = threading.Lock()
-        self._init_db()
-
-    def _conn(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
-
-    def _init_db(self):
-        conn = self._conn()
-        conn.execute(_CREATE_TABLE)
-        conn.commit()
-        conn.close()
+        self._db.executescript(_CREATE_TABLE)
 
     @staticmethod
     def estimate_cost(model: str, provider: str, input_tokens: int, output_tokens: int) -> float:
@@ -93,27 +81,25 @@ class UsageTracker:
             cost_estimate = self.estimate_cost(model, provider, input_tokens, output_tokens)
         total_tokens = input_tokens + output_tokens
         with self._lock:
-            conn = self._conn()
-            conn.execute(
-                "INSERT INTO api_calls (agent, model, provider, input_tokens, output_tokens, "
-                "total_tokens, cost_estimate, task_id, project_id, duration_ms, success, error_message) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                (agent, model, provider, input_tokens, output_tokens, total_tokens,
-                 cost_estimate, task_id, project_id, duration_ms, success, error_message),
-            )
-            conn.commit()
-            conn.close()
+            with self._db.connection() as conn:
+                conn.execute(
+                    "INSERT INTO api_calls (agent, model, provider, input_tokens, output_tokens, "
+                    "total_tokens, cost_estimate, task_id, project_id, duration_ms, success, error_message) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (agent, model, provider, input_tokens, output_tokens, total_tokens,
+                     cost_estimate, task_id, project_id, duration_ms, success, error_message),
+                )
+                conn.commit()
 
     def get_daily_summary(self, date: Optional[str] = None) -> dict:
-        date = date or datetime.utcnow().strftime("%Y-%m-%d")
-        conn = self._conn()
-        rows = conn.execute(
-            "SELECT agent, COUNT(*) as calls, SUM(input_tokens) as inp, "
-            "SUM(output_tokens) as out, SUM(total_tokens) as total, SUM(cost_estimate) as cost "
-            "FROM api_calls WHERE date(timestamp)=? GROUP BY agent",
-            (date,),
-        ).fetchall()
-        conn.close()
+        date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        with self._db.connection() as conn:
+            rows = conn.execute(
+                "SELECT agent, COUNT(*) as calls, SUM(input_tokens) as inp, "
+                "SUM(output_tokens) as out, SUM(total_tokens) as total, SUM(cost_estimate) as cost "
+                "FROM api_calls WHERE date(timestamp)=? GROUP BY agent",
+                (date,),
+            ).fetchall()
         per_agent = {r["agent"]: {"calls": r["calls"], "input_tokens": r["inp"] or 0,
                                    "output_tokens": r["out"] or 0, "total_tokens": r["total"] or 0,
                                    "cost": r["cost"] or 0.0} for r in rows}
@@ -126,15 +112,14 @@ class UsageTracker:
         }
 
     def get_agent_summary(self, agent: str, days: int = 30) -> dict:
-        since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
-        conn = self._conn()
-        row = conn.execute(
-            "SELECT COUNT(*) as calls, SUM(input_tokens) as inp, SUM(output_tokens) as out, "
-            "SUM(total_tokens) as total, SUM(cost_estimate) as cost, AVG(duration_ms) as avg_dur "
-            "FROM api_calls WHERE agent=? AND date(timestamp)>=?",
-            (agent, since),
-        ).fetchone()
-        conn.close()
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+        with self._db.connection() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) as calls, SUM(input_tokens) as inp, SUM(output_tokens) as out, "
+                "SUM(total_tokens) as total, SUM(cost_estimate) as cost, AVG(duration_ms) as avg_dur "
+                "FROM api_calls WHERE agent=? AND date(timestamp)>=?",
+                (agent, since),
+            ).fetchone()
         return {
             "agent": agent,
             "days": days,
@@ -147,15 +132,14 @@ class UsageTracker:
         }
 
     def get_model_summary(self, days: int = 30) -> dict:
-        since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
-        conn = self._conn()
-        rows = conn.execute(
-            "SELECT model, provider, COUNT(*) as calls, SUM(total_tokens) as total, "
-            "SUM(cost_estimate) as cost FROM api_calls WHERE date(timestamp)>=? "
-            "GROUP BY model, provider ORDER BY cost DESC",
-            (since,),
-        ).fetchall()
-        conn.close()
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+        with self._db.connection() as conn:
+            rows = conn.execute(
+                "SELECT model, provider, COUNT(*) as calls, SUM(total_tokens) as total, "
+                "SUM(cost_estimate) as cost FROM api_calls WHERE date(timestamp)>=? "
+                "GROUP BY model, provider ORDER BY cost DESC",
+                (since,),
+            ).fetchall()
         return {
             "days": days,
             "models": [{"model": r["model"], "provider": r["provider"], "calls": r["calls"],
@@ -163,13 +147,12 @@ class UsageTracker:
         }
 
     def get_total_cost(self, days: int = 30) -> float:
-        since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
-        conn = self._conn()
-        row = conn.execute(
-            "SELECT SUM(cost_estimate) as cost FROM api_calls WHERE date(timestamp)>=?",
-            (since,),
-        ).fetchone()
-        conn.close()
+        since = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+        with self._db.connection() as conn:
+            row = conn.execute(
+                "SELECT SUM(cost_estimate) as cost FROM api_calls WHERE date(timestamp)>=?",
+                (since,),
+            ).fetchone()
         return row["cost"] or 0.0
 
     def get_cost_report(self) -> str:

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import sqlite3
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -17,7 +17,7 @@ from memory.embeddings import get_embedder, serialize_embedding, deserialize_emb
 from memory.scoring import compute_importance_score
 from memory.dedup import check_duplicate, handle_duplicate
 from memory.chunker import split_turn, stamp_metadata, Chunk
-from memory.knowledge_cache import lookup_facts
+from memory.knowledge_cache import lookup_facts as kc_lookup_facts, store_fact as kc_store_fact
 from memory.retrieval import retrieve_memories, follow_links, apply_context_budget
 
 logger = logging.getLogger(__name__)
@@ -49,13 +49,58 @@ class MemoryEngine:
                 self.db = init_db(db_path)
             except Exception as e2:
                 logger.error(f"Could not create fresh DB: {e2}")
-                # In-memory fallback
                 self.db = init_db(":memory:")
+        # Ensure created_at index exists for efficient dedup pre-filtering
+        try:
+            self.db.execute("CREATE INDEX IF NOT EXISTS idx_memories_created ON memories(created_at)")
+            self.db.commit()
+        except Exception:
+            pass
         self.embedder: Embedder = get_embedder(embedder_config)
+
+    # ─── Fact API (used by Researcher & Verifier) ─────────────────────
+
+    def store_fact(
+        self,
+        fact: str,
+        source_agent: str = "brain",
+        confidence: float = 0.8,
+        metadata: dict | None = None,
+        # Accept and ignore extra kwargs for caller convenience
+        **kwargs,
+    ) -> str:
+        """Store a verified fact in the knowledge cache."""
+        try:
+            embedding = self.embedder.embed(fact)
+        except Exception as e:
+            logger.warning(f"Embedding failed for fact, storing without: {e}")
+            embedding = np.zeros(self.embedder.dim if hasattr(self.embedder, 'dim') else 384)
+        return kc_store_fact(
+            fact=fact,
+            embedding=embedding,
+            source_agent=source_agent,
+            confidence=confidence,
+            db=self.db,
+            metadata=metadata,
+        )
+
+    def lookup_facts(self, query: str, limit: int = 5, min_confidence: float = 0.0) -> list[dict]:
+        """Look up facts from the knowledge cache by semantic similarity."""
+        try:
+            query_embedding = self.embedder.embed(query)
+        except Exception as e:
+            logger.warning(f"Embedding failed for fact query: {e}")
+            return []
+        results = kc_lookup_facts(query_embedding, self.db, limit=limit)
+        if min_confidence > 0:
+            results = [r for r in results if r.get("confidence", 0) >= min_confidence]
+        return results
+
+    # ─── Ingest ───────────────────────────────────────────────────────
 
     def ingest(self, turn: Turn) -> dict:
         """Process a conversation turn through the full pipeline.
-        
+
         Pipeline: split → chunk → stamp → dedup → score → embed → store.
         Never crashes the caller — always returns success/failure dict.
         """
@@ -69,7 +114,6 @@ class MemoryEngine:
         """Inner ingest — may raise."""
         chunks = split_turn(turn.user_message, turn.agent_response)
 
-        # Build cross-links between user query and response chunks
         user_chunk = chunks[0]
         response_ids = [c.id for c in chunks[1:]]
 
@@ -81,28 +125,25 @@ class MemoryEngine:
                             sibling_ids=[c.id for c in chunks[1:] if c.id != chunk.id],
                             linked_ids={"query_id": user_chunk.id})
 
-        # Load existing embeddings for dedup
+        # Load recent embeddings for dedup (bounded, not full table scan)
         existing = self._get_existing_embeddings()
 
         stored_ids: list[str] = []
         importance = compute_importance_score(turn.signals or [])
 
         for chunk in chunks:
-            # Attempt embedding; store without if it fails
             try:
                 embedding = self.embedder.embed(chunk.content)
             except Exception as e:
                 logger.warning(f"Embedding failed for chunk {chunk.id}: {e}, storing text-only")
                 embedding = None
 
-            # Dedup check (skip if no embedding)
             if embedding is not None:
                 dedup_result = check_duplicate(embedding, existing)
                 should_store = handle_duplicate(chunk.id, dedup_result.match_type, dedup_result.matched_id, self.db)
                 if not should_store:
                     continue
 
-            # Store with retry for locked DB
             tags_str = ",".join(turn.tags) if turn.tags else None
             emb_blob = serialize_embedding(embedding) if embedding is not None else None
             self._execute_with_retry(
@@ -132,6 +173,8 @@ class MemoryEngine:
                 else:
                     raise
 
+    # ─── Retrieve ─────────────────────────────────────────────────────
+
     def retrieve(
         self,
         query: str,
@@ -144,7 +187,6 @@ class MemoryEngine:
             query_embedding = self.embedder.embed(query)
         except Exception as e:
             logger.warning(f"Embedding failed for query, falling back to keyword search: {e}")
-            # Fall back to keyword search
             try:
                 return self._keyword_search(query, limit)
             except Exception as e2:
@@ -152,17 +194,14 @@ class MemoryEngine:
                 return []
 
         try:
-            # Check knowledge cache first
             try:
-                facts = lookup_facts(query_embedding, self.db, limit=2)
+                facts = kc_lookup_facts(query_embedding, self.db, limit=2)
             except Exception as e:
                 logger.warning(f"Knowledge cache lookup failed: {e}")
                 facts = []
 
-            # Retrieve from memories
             memories = retrieve_memories(query_embedding, self.db, strategy, limit, tags)
 
-            # Follow links for top results to get related context
             for mem in memories[:3]:
                 try:
                     linked = follow_links(mem["id"], self.db, depth=1)
@@ -170,7 +209,6 @@ class MemoryEngine:
                 except Exception:
                     mem["linked_memories"] = []
 
-            # Prepend high-confidence facts
             results: list[dict] = []
             for f in facts:
                 if f["confidence"] >= 0.7 and f["similarity"] > 0.5:
@@ -195,6 +233,8 @@ class MemoryEngine:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    # ─── Feedback & Budget ────────────────────────────────────────────
+
     def feedback(self, memory_id: str, positive: bool = True) -> None:
         """Adjust memory importance based on user feedback."""
         delta = 0.1 if positive else -0.3
@@ -213,13 +253,22 @@ class MemoryEngine:
         available = total_tokens - system_tokens - conversation_tokens - response_buffer
         return min(available, max_memory_tokens)
 
-    def _get_existing_embeddings(self) -> list[tuple[str, np.ndarray]]:
-        """Load all existing embeddings for dedup comparison."""
-        rows = self.db.execute("SELECT id, embedding FROM memories WHERE embedding IS NOT NULL").fetchall()
+    # ─── Dedup helpers ────────────────────────────────────────────────
+
+    def _get_existing_embeddings(self, max_recent: int = 1000) -> list[tuple[str, np.ndarray]]:
+        """Load recent embeddings for dedup comparison (bounded, not full table scan)."""
+        rows = self.db.execute(
+            "SELECT id, embedding FROM memories WHERE embedding IS NOT NULL "
+            "ORDER BY created_at DESC LIMIT ?",
+            (max_recent,),
+        ).fetchall()
         result: list[tuple[str, np.ndarray]] = []
         for row in rows:
-            emb = deserialize_embedding(row["embedding"])
-            result.append((row["id"], emb))
+            try:
+                emb = deserialize_embedding(row["embedding"])
+                result.append((row["id"], emb))
+            except Exception:
+                continue
         return result
 
 
@@ -231,43 +280,27 @@ if __name__ == "__main__":
         db_path = os.path.join(tmpdir, "test.db")
         engine = MemoryEngine(db_path=db_path)
 
-        # Ingest a turn
         turn = Turn(
             user_message="How do I set up OAuth2 in Python?",
-            agent_response="You can use the `authlib` library for OAuth2 in Python. Install it with pip install authlib. Then configure your client credentials and use the OAuth2Session class.",
+            agent_response="You can use the `authlib` library for OAuth2 in Python.",
             agent="brain",
             tags=["domain:python", "topic:oauth2"],
             signals=["technical_detail"],
         )
         result = engine.ingest(turn)
-        stored = result.get("stored_ids", []) if isinstance(result, dict) else result
+        stored = result.get("stored_ids", [])
         print(f"Stored {len(stored)} memories: {stored}")
 
-        # Ingest another turn
-        turn2 = Turn(
-            user_message="What about refresh tokens?",
-            agent_response="Refresh tokens are handled automatically by authlib's OAuth2Session. Set token_endpoint_auth_method and the session will refresh when the access token expires.",
-            agent="brain",
-            tags=["domain:python", "topic:oauth2"],
-            signals=["technical_detail"],
-        )
-        result2 = engine.ingest(turn2)
-        stored2 = result2.get("stored_ids", []) if isinstance(result2, dict) else result2
-        print(f"Stored {len(stored2)} more memories: {stored2}")
+        # Test store_fact / lookup_facts
+        fact_id = engine.store_fact("authlib supports OAuth2", source_agent="verifier", confidence=0.9)
+        print(f"Stored fact: {fact_id}")
+        facts = engine.lookup_facts("OAuth2 library", limit=3)
+        print(f"Looked up {len(facts)} facts")
 
-        # Retrieve
         results = engine.retrieve("OAuth2 Python setup", limit=3)
-        print(f"\nRetrieved {len(results)} memories:")
-        for r in results:
-            print(f"  - [{r.get('type', 'memory')}] score={r.get('score', r.get('similarity', 'N/A')):.3f}: {r.get('content', r.get('fact', ''))[:80]}...")
+        print(f"Retrieved {len(results)} memories")
 
-        # Feedback
-        if results:
-            engine.feedback(results[0]["id"], positive=True)
-            print(f"\nBoosted importance of {results[0]['id']}")
-
-        # Budget
         budget = engine.get_context_budget(total_tokens=100000, conversation_tokens=30000)
-        print(f"\nContext budget: {budget} tokens for memory injection")
+        print(f"Context budget: {budget} tokens")
 
     print("\n=== All tests passed ===")

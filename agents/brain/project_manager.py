@@ -12,9 +12,11 @@ import os
 import sqlite3
 import uuid
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+
+from agents.common.db_helper import SQLiteHelper
 
 logger = logging.getLogger(__name__)
 
@@ -229,28 +231,23 @@ class ProjectManager:
     """Manages structured projects with feature hierarchy and idea backlog."""
 
     def __init__(self, db_path: str = "data/projects.db"):
+        self._db = SQLiteHelper(db_path)
         self.db_path = db_path
-        os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
         self._init_db()
 
     def _init_db(self):
-        conn = sqlite3.connect(self.db_path)
-        # Run migrations FIRST for existing databases (before schema creates indexes on new columns)
-        for migration in MIGRATIONS:
-            try:
-                conn.execute(migration)
-            except sqlite3.OperationalError:
-                pass  # Column/table already exists or doesn't need migration
-        conn.commit()
-        # Then create any missing tables/indexes
-        conn.executescript(SCHEMA_SQL)
-        conn.commit()
-        conn.close()
+        with self._db.connection() as conn:
+            for migration in MIGRATIONS:
+                try:
+                    conn.execute(migration)
+                except sqlite3.OperationalError:
+                    pass
+            conn.commit()
+            conn.executescript(SCHEMA_SQL)
+            conn.commit()
 
     def _conn(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
+        return self._db.conn()
 
     # ─── Detection ────────────────────────────────────────────────────
 
@@ -282,7 +279,7 @@ class ProjectManager:
             title=title,
             description=description,
             domain=domain,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             status="backlog",
         )
         conn = self._conn()
@@ -372,7 +369,7 @@ class ProjectManager:
             description=description,
             spec=spec,
             status="planning",
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             domain=domain,
         )
 

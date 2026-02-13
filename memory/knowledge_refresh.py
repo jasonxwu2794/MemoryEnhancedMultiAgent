@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ def run_refresh(db_path: str | Path) -> dict:
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     flagged = 0
     already_permanent = 0
     skipped = 0
