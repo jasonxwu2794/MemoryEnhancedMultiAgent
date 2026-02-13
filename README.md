@@ -43,6 +43,25 @@ No Docker. No Redis. No YAML files. Just one SQLite database and a system that g
 
 ---
 
+## 🖥️ VPS Setup
+
+You'll need a cheap VPS to run this. Here's the easiest path:
+
+1. **Get a VPS** — [Hostinger KVM 2](https://www.hostinger.com/vps-hosting) (~$6-12/mo) with **Ubuntu 22.04 or 24.04**, 2 vCPU, 8GB RAM. Pick the region closest to you.
+2. **Open the terminal** — in your Hostinger dashboard, click your VPS → **Terminal** button. You're in.
+3. **Update the OS** (fresh box housekeeping):
+```bash
+apt update && apt upgrade -y
+```
+
+**Have these ready before you start:**
+- 🔑 An API key from at least one provider ([Anthropic](https://console.anthropic.com/settings/keys) or [DeepSeek](https://platform.deepseek.com/api_keys) recommended)
+- 💬 A Telegram bot token (message [@BotFather](https://t.me/BotFather) on Telegram to create one) — or use Discord/Signal/CLI instead
+
+That's it. Now run the installer 👇
+
+---
+
 ## 🚀 Quick Start
 
 ```bash
