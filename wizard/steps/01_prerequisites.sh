@@ -145,4 +145,16 @@ else
     wizard_success "All dependencies satisfied!"
 fi
 
+# --- Ensure pip is available (Ubuntu may have Python without pip) ---
+if ! python3 -m pip --version &>/dev/null; then
+    log_warn "pip not found — installing..."
+    if command -v apt-get &>/dev/null; then
+        sudo apt-get install -y -qq python3-pip 2>/dev/null || true
+    fi
+    # Fallback: ensurepip
+    if ! python3 -m pip --version &>/dev/null; then
+        python3 -m ensurepip --upgrade 2>/dev/null || log_warn "Could not install pip — some features may not work"
+    fi
+fi
+
 state_set "prerequisites_done" "true"
