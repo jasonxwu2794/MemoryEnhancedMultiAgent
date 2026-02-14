@@ -19,13 +19,13 @@ fi
 # --- Collect info ---
 NAME=""
 while [ -z "$NAME" ]; do
-    NAME="$(wizard_input "👤 What's your name?" "e.g. Jason" "$DEF_NAME")"
+    NAME="$(wizard_input "👤 What's your name?" "e.g. Alex" "$DEF_NAME")"
     [ -z "$NAME" ] && log_warn "Name is required."
 done
 
 PREFERRED=""
 while [ -z "$PREFERRED" ]; do
-    PREFERRED="$(wizard_input "💬 What should agents call you?" "e.g. Jase" "${DEF_PREF:-$NAME}")"
+    PREFERRED="$(wizard_input "💬 What should agents call you?" "e.g. Al, Boss, Captain" "${DEF_PREF:-$NAME}")"
     [ -z "$PREFERRED" ] && log_warn "Preferred name is required."
 done
 
