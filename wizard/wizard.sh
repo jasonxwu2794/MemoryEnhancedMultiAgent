@@ -106,8 +106,8 @@ gum style \
     --bold \
     --foreground 2 \
     --align center \
-    "🎉 Setup Complete!" \
+    "🎉  Setup Complete!  " \
     "" \
-    "Your multi-agent system is ready." \
-    "Brain is online and waiting for your first message."
+    "Your multi-agent system is ready.   " \
+    "Brain is online and waiting for your first message.   "
 echo ""
