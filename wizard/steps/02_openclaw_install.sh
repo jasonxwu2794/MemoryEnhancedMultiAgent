@@ -76,7 +76,11 @@ fi
 
 # --- Install Aider (AI code editing tool) ---
 log_info "Installing Aider (AI-powered code editor)..."
-wizard_spin "Installing aider-chat..." python3 -m pip install --break-system-packages --ignore-installed aider-chat 2>/dev/null || python3 -m pip install --break-system-packages aider-chat
+wizard_spin "Installing aider-chat..." python3 -m pip install --break-system-packages --ignore-installed --no-deps aider-chat 2>/dev/null \
+    || python3 -m pip install --break-system-packages --ignore-installed aider-chat 2>/dev/null \
+    || log_warn "Aider pip install had issues — will check if it's usable anyway"
+# Install aider's deps separately, ignoring system conflicts
+python3 -m pip install --break-system-packages --ignore-installed urllib3 requests httpx 2>/dev/null || true
 
 if has_cmd aider; then
     AIDER_VER="$(timeout 5 aider --version 2>/dev/null || echo 'installed')"
