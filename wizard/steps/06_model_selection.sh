@@ -28,7 +28,14 @@ if [ "$QUICK_CHOICE" = "Use recommended defaults" ]; then
     wizard_divider
     gum style --bold "Model Selection (defaults):"
     echo ""
-    printf "Agent\tModel\tCost/M Input\tRole\nBrain\tClaude Opus 4.6\t~\$10.00\tOrchestrator\nBuilder\tDeepSeek V3.2 Reasoner\t\$0.28\tCode generation\nResearcher\tKimi K2.5 (dual)\t\$0.14\tResearch + synthesis\nVerifier\tDeepSeek V3.2 Reasoner\t\$0.28\tCode review + QA\nGuardian\tDeepSeek V3.2 Chat\t\$0.28\tSecurity gate" | gum table -s $'\t'
+    gum style --border rounded --border-foreground 212 --padding "1 2" --margin "0 2" \
+        "  Agent         Model                      Cost/M    Role" \
+        "  ─────         ─────                      ──────    ────" \
+        "  Brain         Claude Opus 4.6            ~\$10.00   Orchestrator" \
+        "  Builder       DeepSeek V3.2 Reasoner     \$0.28     Code generation" \
+        "  Researcher    Kimi K2.5 (dual)           \$0.14     Research + synthesis" \
+        "  Verifier      DeepSeek V3.2 Reasoner     \$0.28     Code review + QA" \
+        "  Guardian      DeepSeek V3.2 Chat         \$0.28     Security gate"
     echo ""
     gum style --foreground 240 "  Estimated cost at moderate usage (~1000 messages/day):"
     gum style --foreground 212 "  ~\$3-5/day with recommended models  ·  Brain (Opus) is the main cost driver"
