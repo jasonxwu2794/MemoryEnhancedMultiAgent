@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ============================================================================
 # Cortex by Ajentic — Installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/jasonxwu2794/MemoryEnhancedMultiAgent/main/install.sh | bash
+# Usage: curl -fsSL https://raw.githubusercontent.com/jasonxwu2794/cortex/main/install.sh | bash
 # ============================================================================
 set -euo pipefail
 
-REPO_URL="https://github.com/jasonxwu2794/MemoryEnhancedMultiAgent.git"
-INSTALL_DIR="${INSTALL_DIR:-$HOME/MemoryEnhancedMultiAgent}"
+REPO_URL="https://github.com/jasonxwu2794/cortex.git"
+INSTALL_DIR="${INSTALL_DIR:-$HOME/cortex}"
 GUM_VERSION="0.17.0"
 
 # --- Colors (fallback before gum is available) ---

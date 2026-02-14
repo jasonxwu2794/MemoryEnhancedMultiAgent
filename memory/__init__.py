@@ -1,4 +1,4 @@
-"""Memory engine for the MemoryEnhancedMultiAgent system."""
+"""Memory engine for the cortex system."""
 
 from memory.engine import MemoryEngine
 from memory import consolidation_runner

@@ -24,7 +24,7 @@ Run through this after the wizard completes to verify everything works.
 ## 5. Memory Working?
 - [ ] Tell Cortex "my favorite language is Python"
 - [ ] Wait a minute, then ask "what's my favorite language?" → should remember
-- [ ] Check memory DB exists: `ls ~/MemoryEnhancedMultiAgent/data/`
+- [ ] Check memory DB exists: `ls ~/cortex/data/`
 
 ## 6. Project Pipeline?
 - [ ] `/ideas` → shows your idea backlog
@@ -44,7 +44,7 @@ Run through this after the wizard completes to verify everything works.
   - Idea surfacing (weekly Monday)
 
 ## 9. Morning Brief?
-- [ ] Wait for scheduled time OR manually trigger: `python3 ~/MemoryEnhancedMultiAgent/scripts/morning_brief.py`
+- [ ] Wait for scheduled time OR manually trigger: `python3 ~/cortex/scripts/morning_brief.py`
 - [ ] Check your messaging platform for the digest
 
 ## 🚨 Common Issues
@@ -66,4 +66,4 @@ Run through this after the wizard completes to verify everything works.
 ### Crons not running
 1. Check crontab: `crontab -l`
 2. Check cron service: `systemctl status cron`
-3. Check script permissions: `ls -la ~/MemoryEnhancedMultiAgent/scripts/`
+3. Check script permissions: `ls -la ~/cortex/scripts/`

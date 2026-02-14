@@ -1,4 +1,4 @@
-"""Custom exception classes for the MemoryEnhancedMultiAgent system."""
+"""Custom exception classes for the cortex system."""
 
 
 class AgentError(Exception):

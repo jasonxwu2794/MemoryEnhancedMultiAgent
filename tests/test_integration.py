@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Integration tests for MemoryEnhancedMultiAgent — validates all layers work together."""
+"""Integration tests for cortex — validates all layers work together."""
 
 import sys
 import os

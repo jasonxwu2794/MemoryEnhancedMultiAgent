@@ -67,7 +67,7 @@ That's it. Now run the installer 👇
 ## 🚀 Quick Start
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jasonxwu2794/MemoryEnhancedMultiAgent/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/jasonxwu2794/cortex/main/install.sh | bash
 ```
 
 **What happens next:**
@@ -222,7 +222,7 @@ You'll need an API key for at least one provider: [Anthropic](https://console.an
 ## 📁 Project Structure
 
 ```
-MemoryEnhancedMultiAgent/
+cortex/
 ├── install.sh                    # Entry point — one curl, one command
 ├── Makefile                      # Dev commands (test, lint, install)
 ├── pyproject.toml                # Python project config

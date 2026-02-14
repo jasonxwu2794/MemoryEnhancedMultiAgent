@@ -1,4 +1,4 @@
-# Code Audit Report — MemoryEnhancedMultiAgent
+# Code Audit Report — cortex
 
 **Date:** 2026-02-13
 **Auditor:** T Builder 1

@@ -10,7 +10,7 @@ cleanup() {
     echo ""
     gum style --foreground 240 "  Setup cancelled. Re-run anytime with:"
     echo ""
-    gum style --foreground 212 --padding "0 2" "  bash <(curl -sL https://raw.githubusercontent.com/jasonxwu2794/MemoryEnhancedMultiAgent/main/install.sh)"
+    gum style --foreground 212 --padding "0 2" "  bash <(curl -sL https://raw.githubusercontent.com/jasonxwu2794/cortex/main/install.sh)"
     echo ""
     exit 130
 }
