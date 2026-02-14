@@ -1,4 +1,4 @@
-# ROADMAP
+# Cortex by Ajentic — Roadmap
 
 ## Phase 1: Foundation ✅
 

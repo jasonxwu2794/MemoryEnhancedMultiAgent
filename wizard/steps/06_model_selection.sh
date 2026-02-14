@@ -27,11 +27,16 @@ if [ "$QUICK_CHOICE" = "Use recommended defaults" ]; then
     state_set "providers.guardian" "deepseek"
     wizard_divider
     gum style --bold "Model Selection (defaults):"
-    echo "  🧠 Brain:       Claude Opus 4.6"
-    echo "  🔨 Builder:     DeepSeek V3.2 Reasoner"
-    echo "  🔬 Researcher:  Kimi K2.5 Thinking + Instant"
-    echo "  ✅ Verifier:    DeepSeek V3.2 Reasoner"
-    echo "  🛡️ Guardian:    DeepSeek V3.2 Chat"
+    echo ""
+    gum style --border rounded --border-foreground 212 --padding "1 2" --margin "0 2" \
+        "  Agent         Model                     Cost/M    Role" \
+        "  ─────         ─────                     ──────    ────" \
+        "  Brain         Claude Opus 4.6           ~\$10.00   Orchestrator" \
+        "  Builder       DeepSeek V3.2 Reasoner    \$0.28     Code generation" \
+        "  Researcher    Kimi K2.5 (dual)          \$0.14     Research + synthesis" \
+        "  Verifier      DeepSeek V3.2 Reasoner    \$0.28     Code review + QA" \
+        "  Guardian      DeepSeek V3.2 Chat        \$0.28     Security gate"
+    echo ""
     wizard_success "Model defaults applied!"
     return 0 2>/dev/null || exit 0
 fi

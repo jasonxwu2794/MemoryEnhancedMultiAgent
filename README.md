@@ -1,4 +1,4 @@
-# 🧠 Memory-Enhanced Multi-Agent System
+# 🧠 Cortex by Ajentic
 
 > **Zero to AI agent team in one command. No config files. No PhD required.**
 

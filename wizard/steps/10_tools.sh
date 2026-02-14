@@ -44,15 +44,15 @@ fi
 
 # --- Tool options ---
 TOOL_OPTS=(
-    "🔍 Web Search — Search the web via Brave API"
-    "🐙 GitHub — Repo management, PRs, issues"
+    "🔍 Web Search — Web Search (built-in)"
     "📁 File Access — Read/write workspace files"
     "⚡ Code Execution — Run code in sandbox"
     "🌐 Web Fetch — Scrape and extract web content"
+    "🐙 GitHub — Repo management, PRs, issues"
 )
 
 # Pre-select recommended tools regardless of mode
-DEFAULT_SELECTED=("🔍 Web Search — Search the web via Brave API" "🐙 GitHub — Repo management, PRs, issues" "📁 File Access — Read/write workspace files" "⚡ Code Execution — Run code in sandbox" "🌐 Web Fetch — Scrape and extract web content")
+DEFAULT_SELECTED=("🔍 Web Search — Web Search (built-in)" "📁 File Access — Read/write workspace files" "⚡ Code Execution — Run code in sandbox" "🌐 Web Fetch — Scrape and extract web content" "🐙 GitHub — Repo management, PRs, issues")
 
 echo ""
 gum style --foreground 240 "  Use space to toggle, enter to confirm"

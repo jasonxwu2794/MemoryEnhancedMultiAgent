@@ -1,4 +1,4 @@
-# Memory-Enhanced Multi-Agent System — Architecture
+# Cortex by Ajentic — Architecture
 
 ## Project Vision
 
