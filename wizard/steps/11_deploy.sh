@@ -23,22 +23,20 @@ _summary_framework="$(state_get 'tech_stack.frameworks' '')"
 gum style --bold --foreground 212 "📋  Configuration Summary"
 echo ""
 
-_table_fmt="Setting,Value\nBrain,%s (%s)\nBuilder,%s\nResearcher,%s\nVerifier,%s\nGuardian,%s\nChannel,%s\nMemory,%s\nTools,%s"
-_table_args=(
-    "$_summary_brain_name" "$_summary_model_brain"
-    "$_summary_model_builder"
-    "$_summary_model_researcher"
-    "$_summary_model_verifier"
-    "$_summary_model_guardian"
-    "$_summary_channel"
-    "$_summary_memory"
-    "$_summary_tools"
-)
+_table_data="Setting\tValue"
+_table_data+="\nBrain\t$_summary_brain_name ($_summary_model_brain)"
+_table_data+="\nBuilder\t$_summary_model_builder"
+_table_data+="\nResearcher\t$_summary_model_researcher"
+_table_data+="\nVerifier\t$_summary_model_verifier"
+_table_data+="\nGuardian\t$_summary_model_guardian"
+_table_data+="\nChannel\t$_summary_channel"
+_table_data+="\nMemory\t$_summary_memory"
+_table_data+="\nTools\t$_summary_tools"
 
-[ -n "$_summary_language" ] && { _table_fmt="${_table_fmt}\nLanguage,%s"; _table_args+=("$_summary_language"); }
-[ -n "$_summary_framework" ] && { _table_fmt="${_table_fmt}\nFramework,%s"; _table_args+=("$_summary_framework"); }
+[ -n "$_summary_language" ] && _table_data+="\nLanguage\t$_summary_language"
+[ -n "$_summary_framework" ] && _table_data+="\nFramework\t$_summary_framework"
 
-printf "$_table_fmt" "${_table_args[@]}" | gum table --border.foreground 212
+printf "$_table_data" | gum table -s $'\t'
 
 echo ""
 if ! wizard_confirm "Deploy with these settings?"; then
