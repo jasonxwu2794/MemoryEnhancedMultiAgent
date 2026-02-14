@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Memory-Enhanced Multi-Agent System — Installer
+# Cortex by Ajentic — Installer
 # Usage: curl -fsSL https://raw.githubusercontent.com/jasonxwu2794/MemoryEnhancedMultiAgent/main/install.sh | bash
 # ============================================================================
 set -euo pipefail
@@ -24,9 +24,7 @@ fail()  { echo -e "${RED}❌${RESET} $*"; exit 1; }
 
 # --- Banner ---
 echo ""
-echo -e "${BOLD}╔══════════════════════════════════════════════════╗${RESET}"
-echo -e "${BOLD}║   Memory-Enhanced Multi-Agent System Installer   ║${RESET}"
-echo -e "${BOLD}╚══════════════════════════════════════════════════╝${RESET}"
+echo -e "${BOLD}  Cortex${RESET} by Ajentic — Installer"
 echo ""
 
 # --- Step 0: Ensure git and curl exist (needed to bootstrap) ---

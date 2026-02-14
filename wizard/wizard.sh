@@ -1,9 +1,20 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Memory-Enhanced Multi-Agent System — Setup Wizard
+# Cortex — Setup Wizard
 # Main orchestrator that runs each step in sequence.
 # ============================================================================
 set -euo pipefail
+
+cleanup() {
+    echo ""
+    echo ""
+    gum style --foreground 240 "  Setup cancelled. Re-run anytime with:"
+    echo ""
+    gum style --foreground 212 --padding "0 2" "  bash <(curl -sL https://raw.githubusercontent.com/jasonxwu2794/MemoryEnhancedMultiAgent/main/install.sh)"
+    echo ""
+    exit 130
+}
+trap cleanup INT
 
 WIZARD_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$WIZARD_DIR/utils.sh"
@@ -24,19 +35,21 @@ export RECONFIGURE
 
 # --- Welcome Banner ---
 clear 2>/dev/null || true
+echo ""
 gum style \
-    --border double \
-    --border-foreground 212 \
-    --padding "2 6" \
-    --margin "1 4" \
-    --bold \
+    --foreground 212 \
     --align center \
-    " 🧠  Memory-Enhanced Multi-Agent System" \
+    --margin "1 4" \
+    "   ██████╗ ██████╗ ██████╗ ████████╗███████╗██╗  ██╗" \
+    "  ██╔════╝██╔═══██╗██╔══██╗╚══██╔══╝██╔════╝╚██╗██╔╝" \
+    "  ██║     ██║   ██║██████╔╝   ██║   █████╗   ╚███╔╝ " \
+    "  ██║     ██║   ██║██╔══██╗   ██║   ██╔══╝   ██╔██╗ " \
+    "  ╚██████╗╚██████╔╝██║  ██║   ██║   ███████╗██╔╝ ██╗" \
+    "   ╚═════╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝"
+gum style --foreground 240 --align center --margin "0 4" \
+    "by Ajentic" \
     "" \
-    "Setup Wizard" \
-    "" \
-    "$(if [ "$RECONFIGURE" = "1" ]; then echo "Reconfiguration Mode"; else echo "Fresh Install"; fi)"
-
+    "$(if [ "$RECONFIGURE" = "1" ]; then echo "Reconfiguration Mode"; else echo "Setup Wizard"; fi)"
 echo ""
 
 if [ "$RECONFIGURE" = "1" ] && [ -f "$STATE_FILE" ]; then
@@ -95,7 +108,11 @@ for step_file in "${STEPS[@]}"; do
     wizard_progress "$CURRENT_STEP" "${STEP_NAMES[$((CURRENT_STEP - 1))]}"
 
     # Source and execute the step
+    STEP_START=$(date +%s)
     source "$step_path"
+    STEP_END=$(date +%s)
+    elapsed=$((STEP_END - STEP_START))
+    gum style --foreground 240 "  completed in ${elapsed}s"
 
     # Save timestamp after each step
     state_save_timestamp
@@ -122,8 +139,8 @@ gum style \
     --bold \
     --foreground 2 \
     --align center \
-    "🎉  Setup Complete!  " \
+    "Setup Complete!" \
     "" \
-    "Your multi-agent system is ready.   " \
-    "Brain is online and waiting for your first message.   "
+    "Cortex is ready." \
+    "Your brain is online and waiting for your first message."
 echo ""

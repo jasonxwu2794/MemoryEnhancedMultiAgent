@@ -44,18 +44,20 @@ check_dependency "curl"         "curl"    ""     "--version"
 check_dependency "Node.js 18+"  "node"    "18.0" "--version"
 
 # --- Display results ---
+# Build compact results line
 results=""
 for dep in "Python 3.10+" "git" "curl" "Node.js 18+"; do
     status="${DEPS_STATUS[$dep]}"
     ver="${DEPS_VERSION[$dep]}"
     case "$status" in
-        ok)       results+="   ✅  $dep ($ver)\n" ;;
-        missing)  results+="   ❌  $dep — not found\n" ;;
-        outdated) results+="   ❌  $dep — found $ver, need newer\n" ;;
+        ok)       results+="$(gum style --foreground 2 '✓') $dep ($ver)  " ;;
+        missing)  results+="$(gum style --foreground 1 '✗') $dep  " ;;
+        outdated) results+="$(gum style --foreground 1 '✗') $dep ($ver)  " ;;
     esac
 done
-
-echo -e "$results"
+echo ""
+echo "  $results"
+echo ""
 
 # --- Install missing dependencies ---
 if [ ${#MISSING[@]} -gt 0 ]; then

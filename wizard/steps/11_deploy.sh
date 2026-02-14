@@ -904,7 +904,7 @@ _setup_github_remote() {
             CREATE_RESP="$(curl -sf -X POST \
                 -H "Authorization: token $GH_TOKEN" \
                 -H "Content-Type: application/json" \
-                -d "{\"name\":\"$REPO_NAME\",\"private\":true,\"description\":\"$BRAIN_NAME workspace — memory-enhanced multi-agent system\"}" \
+                -d "{\"name\":\"$REPO_NAME\",\"private\":true,\"description\":\"$BRAIN_NAME workspace — Cortex\"}" \
                 https://api.github.com/user/repos 2>/dev/null)"
 
             REPO_URL="$(echo "$CREATE_RESP" | jq -r '.clone_url // empty' 2>/dev/null)"
