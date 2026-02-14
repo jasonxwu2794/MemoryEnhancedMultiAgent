@@ -970,14 +970,14 @@ gum style \
     --bold \
     "Deployment Complete!" \
     "" \
-    "  User:        $USER_NAME ($USER_PREF)" \
-    "  Brain:       $BRAIN_NAME ($MODEL_BRAIN)" \
-    "  Builder:     $MODEL_BUILDER" \
-    "  Researcher:  $MODEL_RESEARCHER_THINKING / $MODEL_RESEARCHER_INSTANT" \
-    "  Verifier:    $MODEL_VERIFIER" \
-    "  Guardian:    $MODEL_GUARDIAN" \
-    "  Memory:      $MEMORY_TIER" \
-    "  Channel:     $MESSAGING" \
+    "  👤  User:        $USER_NAME ($USER_PREF)" \
+    "  🧠  Brain:       $BRAIN_NAME ($MODEL_BRAIN)" \
+    "  🔨  Builder:     $MODEL_BUILDER" \
+    "  🔬  Researcher:  $MODEL_RESEARCHER_THINKING / $MODEL_RESEARCHER_INSTANT" \
+    "  ✅  Verifier:    $MODEL_VERIFIER" \
+    "  🛡   Guardian:    $MODEL_GUARDIAN" \
+    "  💾  Memory:      $MEMORY_TIER" \
+    "  💬  Channel:     $MESSAGING" \
     "" \
     "  Config:  $OC_CONFIG" \
     "  Auth:    $OC_AUTH" \
