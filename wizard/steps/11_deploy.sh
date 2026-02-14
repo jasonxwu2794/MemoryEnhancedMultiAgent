@@ -7,6 +7,49 @@
 
 wizard_header "11" "Deploy" "Generating configuration and launching your agents..."
 
+# --- Configuration Summary ---
+_summary_brain_name="$(state_get 'brain.name' 'Cortex')"
+_summary_model_brain="$(state_get 'models.brain' 'claude-opus-4-6')"
+_summary_model_builder="$(state_get 'models.builder' 'deepseek-reasoner')"
+_summary_model_researcher="$(state_get 'models.researcher.thinking' 'kimi-k2.5-thinking')"
+_summary_model_verifier="$(state_get 'models.verifier' 'deepseek-reasoner')"
+_summary_model_guardian="$(state_get 'models.guardian' 'deepseek-chat')"
+_summary_channel="$(state_get 'messaging' 'cli')"
+_summary_memory="$(state_get 'memory_tier' 'full')"
+_summary_tools="$(state_get 'tools' 'default')"
+_summary_language="$(state_get 'tech_stack.language' '')"
+_summary_framework="$(state_get 'tech_stack.frameworks' '')"
+
+_summary_lines=(
+    "📋  Configuration Summary"
+    ""
+    "  🧠  Brain:        $_summary_brain_name ($_summary_model_brain)"
+    "  🔨  Builder:      $_summary_model_builder"
+    "  🔬  Researcher:   $_summary_model_researcher"
+    "  ✅  Verifier:     $_summary_model_verifier"
+    "  🛡   Guardian:     $_summary_model_guardian"
+    ""
+    "  💬  Channel:      $_summary_channel"
+    "  💾  Memory:       $_summary_memory"
+    "  🔧  Tools:        $_summary_tools"
+)
+
+[ -n "$_summary_language" ] && _summary_lines+=("  💻  Language:     $_summary_language")
+[ -n "$_summary_framework" ] && _summary_lines+=("  📦  Framework:   $_summary_framework")
+
+gum style \
+    --border rounded \
+    --border-foreground 212 \
+    --padding "1 3" \
+    "${_summary_lines[@]}"
+
+echo ""
+if ! wizard_confirm "Deploy with these settings?"; then
+    log_warn "Deployment cancelled. Re-run with --reconfigure to change settings."
+    exit 0
+fi
+echo ""
+
 # --- Paths ---
 OC_DIR="$HOME/.openclaw"
 OC_WORKSPACE="$OC_DIR/workspace"

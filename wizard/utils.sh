@@ -225,6 +225,29 @@ detect_pkg_manager() {
     fi
 }
 
+# --- Progress Bar ---
+
+# Display a dot-based progress bar with step name
+# Usage: wizard_progress <step_num> <step_name>
+wizard_progress() {
+    local step_num="$1"
+    local step_name="$2"
+    local total=12
+    local dots=""
+    for i in $(seq 1 $total); do
+        if [ "$i" -le "$step_num" ]; then
+            dots+="$(gum style --foreground 212 '●') "
+        else
+            dots+="$(gum style --foreground 240 '○') "
+        fi
+    done
+    local label
+    label="$(gum style --foreground 212 --bold "Step ${step_num}: ${step_name}")"
+    echo ""
+    echo "  ${dots}  ${label}"
+    echo ""
+}
+
 # --- Misc ---
 
 # Check if running in reconfigure mode

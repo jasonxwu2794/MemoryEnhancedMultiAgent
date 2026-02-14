@@ -66,6 +66,22 @@ STEPS=(
 TOTAL_STEPS=${#STEPS[@]}
 CURRENT_STEP=0
 
+# Step names corresponding to each step file
+STEP_NAMES=(
+    "Prerequisites"
+    "OpenClaw Install"
+    "Configuration Mode"
+    "User Identity"
+    "Tech Stack"
+    "Brain Personality"
+    "Model Selection"
+    "API Keys"
+    "Memory Setup"
+    "Messaging"
+    "Tools"
+    "Deploy"
+)
+
 for step_file in "${STEPS[@]}"; do
     CURRENT_STEP=$((CURRENT_STEP + 1))
     step_path="$WIZARD_DIR/steps/$step_file"
@@ -76,7 +92,7 @@ for step_file in "${STEPS[@]}"; do
     fi
 
     # Show progress bar
-    gum style --foreground 240 "  [$CURRENT_STEP/$TOTAL_STEPS] ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    wizard_progress "$CURRENT_STEP" "${STEP_NAMES[$((CURRENT_STEP - 1))]}"
 
     # Source and execute the step
     source "$step_path"
