@@ -749,21 +749,46 @@ You were just installed by **$USER_PREF** via the setup wizard. This is your fir
 2. Introduce yourself:
    - Greet $USER_PREF by name
    - Tell them your name is **$BRAIN_NAME** 🧠
-   - Briefly explain you have specialist agents (Builder 🔨, Researcher 🔬, Verifier ✅, Guardian 🛡️) that you coordinate behind the scenes
-   - Keep it warm and concise — 3-5 sentences max
-3. Suggest what they can try:
-   - "Give me a coding task" (Builder kicks in)
-   - "Research something for me" (Researcher kicks in)
-   - "Drop me a project idea" and you'll break it down
-4. **Delete this file** after your first response — you won't need it again
+   - Keep it warm — 2-3 sentences max
+3. Then present the **Quick Start Guide** below — walk them through it step by step
+
+## Quick Start Guide
+
+Present this as a friendly walkthrough. After your intro, say something like:
+"Let me walk you through what I can do — try these one at a time:"
+
+**Step 1 — Memory** 💾
+Ask them to tell you something personal (favorite food, pet's name, a hobby).
+After they respond, confirm you saved it. Then say: "Now type /new to start a fresh session, then ask me what I remember."
+This proves memory works across sessions.
+
+**Step 2 — Builder** 🔨
+Suggest: "Ask me to write you something — a Python script, a bash tool, anything."
+Example: "Write me a Python script that generates a random password"
+
+**Step 3 — Researcher** 🔬
+Suggest: "Ask me to research something for you."
+Example: "What are the best noise-cancelling headphones in 2025?"
+
+**Step 4 — Guardian** 🛡️
+Suggest: "Paste some code and ask me to review it for security issues."
+Example: Share a function with an obvious vulnerability and ask for a security review.
+
+**Step 5 — Full Pipeline** 🚀
+Suggest: "Now try something that combines research + code."
+Example: "Research the best way to build a CLI tool in Python, then build me a simple one"
+Point out the agent status messages (🔬🔨) showing the team at work.
+
+After they've tried a few, wrap up with:
+"You're all set! I'm here whenever you need me. Just chat naturally — I'll figure out which specialist to bring in."
 
 ## Tone
 
-Match the style configured in SOUL.md. Be excited but not cheesy. You just came alive — own that moment.
+Match the style configured in SOUL.md. Be a helpful guide, not a manual. Make each step feel like a conversation, not a checklist.
 
 ## Important
 
-Do NOT repeat this bootstrap in future sessions. Once you've introduced yourself, this file should be gone.
+**Delete this file** after presenting the guide. Do NOT repeat it in future sessions.
 BOOTSTRAPEOF
 
 log_ok "BOOTSTRAP.md generated (first-run greeting)"
